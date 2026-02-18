@@ -17,28 +17,22 @@ export default function Home() {
 
   async function fetchData() {
     try {
-      // Fetch Events
-      const eventsRes = await fetch(
-        `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Events`,
-        { headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` } }
-      )
+      const [eventsRes, playlistsRes, usersRes] = await Promise.all([
+        fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Events`, {
+          headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` }
+        }),
+        fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Playlists`, {
+          headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` }
+        }),
+        fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Users`, {
+          headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` }
+        })
+      ])
+
       const eventsData = await eventsRes.json()
-
-      // Fetch Playlists
-      const playlistsRes = await fetch(
-        `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Playlists`,
-        { headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` } }
-      )
       const playlistsData = await playlistsRes.json()
-
-      // Fetch Users
-      const usersRes = await fetch(
-        `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Users`,
-        { headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` } }
-      )
       const usersData = await usersRes.json()
 
-      // Map IDs to readable values
       const playlistIdToHandle = {}
       playlistsData.records.forEach(p => {
         playlistIdToHandle[p.id] = p.fields.Handle
@@ -49,7 +43,6 @@ export default function Home() {
         userIdToName[u.id] = u.fields['User Name']
       })
 
-      // Transform events
       const transformedEvents = eventsData.records.map(record => ({
         id: record.id,
         title: record.fields.Event,
@@ -59,7 +52,6 @@ export default function Home() {
         verificationStatus: record.fields.Playlist_Verification_Status
       }))
 
-      // Transform playlists
       const transformedPlaylists = playlistsData.records.map(record => ({
         id: record.id,
         handle: record.fields.Handle,
@@ -67,7 +59,6 @@ export default function Home() {
         verificationStatus: record.fields.Playlist_Verification_Status
       }))
 
-      // Filter verified only
       const verifiedEvents = transformedEvents.filter(e => {
         const status = Array.isArray(e.verificationStatus) ? e.verificationStatus[0] : e.verificationStatus
         return status === 'Verified'
@@ -130,96 +121,103 @@ export default function Home() {
 
       {/* Navigation */}
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="text-2xl font-bold">LOCOL</div>
-          <div className="flex gap-8 items-center">
-            <a href="/" className="text-gray-600 hover:text-gray-900">What's on?</a>
-            <a href="/dashboard" className="text-gray-600 hover:text-gray-900">Dashboard</a>
-            <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
-              Add event
-            </button>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="text-2xl font-bold text-gray-900">LOCOL</div>
+            <div className="flex gap-8 items-center">
+              <a href="/" className="text-gray-700 hover:text-gray-900 font-medium">What's on?</a>
+              <a href="/dashboard" className="text-gray-700 hover:text-gray-900 font-medium">Dashboard</a>
+            </div>
           </div>
         </div>
       </nav>
 
       {/* Header */}
-      <header className="max-w-7xl mx-auto px-4 py-8">
-        <h1 className="text-4xl font-bold mb-2">What's on?</h1>
-        <p className="text-gray-600">find & remix juicy events</p>
-      </header>
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">What's on?</h1>
+          <p className="text-lg text-gray-600">find & remix juicy events</p>
+        </div>
+      </div>
 
       {/* Search */}
-      <div className="max-w-7xl mx-auto px-4 py-4">
-        <input
-          type="text"
-          placeholder="Search events..."
-          className="w-full p-3 border border-gray-300 rounded-lg"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+      <div className="bg-gray-50 border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <input
+            type="text"
+            placeholder="Search events..."
+            className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
       </div>
 
       {/* Playlist Filters */}
-      <div className="max-w-7xl mx-auto px-4 py-4">
-        <span className="text-sm text-gray-600 block mb-2">Filter by playlist:</span>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => toggleFilter('all')}
-            className={`px-4 py-2 rounded-full border transition ${
-              activeFilters.has('all')
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'bg-gray-100 border-gray-300 hover:bg-gray-200'
-            }`}
-          >
-            All events
-          </button>
-          {playlists.map(playlist => (
+      <div className="bg-gray-50 border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <label className="text-sm font-medium text-gray-700 block mb-3">Filter by playlist:</label>
+          <div className="flex flex-wrap gap-2">
             <button
-              key={playlist.id}
-              onClick={() => toggleFilter(playlist.handle)}
-              className={`px-4 py-2 rounded-full border transition ${
-                activeFilters.has(playlist.handle)
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-gray-100 border-gray-300 hover:bg-gray-200'
+              onClick={() => toggleFilter('all')}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+                activeFilters.has('all')
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:border-gray-400'
               }`}
             >
-              {playlist.handle}
+              All events
             </button>
-          ))}
+            {playlists.map(playlist => (
+              <button
+                key={playlist.id}
+                onClick={() => toggleFilter(playlist.handle)}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+                  activeFilters.has(playlist.handle)
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:border-gray-400'
+                }`}
+              >
+                {playlist.handle}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Events Grid */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <p className="text-gray-600 mb-4">{filteredEvents.length} events</p>
-        
-        {loading ? (
-          <div className="text-center py-12">Loading...</div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredEvents.map(event => (
-              <div key={event.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg transition">
-                <h3 className="text-lg font-semibold mb-3">{event.title}</h3>
-                <div className="flex flex-col gap-2 mb-4">
-                  <span className="text-sm text-gray-600">{formatDate(event.date)}</span>
-                  <span className="inline-block w-fit px-3 py-1 bg-gray-100 rounded text-sm text-blue-600">
-                    {event.playlist[0]}
-                  </span>
+      <div className="bg-gray-50 min-h-screen">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <p className="text-sm text-gray-600 mb-6">{filteredEvents.length} events</p>
+          
+          {loading ? (
+            <div className="text-center py-12 text-gray-600">Loading...</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredEvents.map(event => (
+                <div key={event.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3 leading-snug">{event.title}</h3>
+                  <div className="flex flex-col gap-2 mb-4">
+                    <span className="text-sm text-gray-600">{formatDate(event.date)}</span>
+                    <span className="inline-block w-fit px-3 py-1 bg-blue-50 text-blue-700 rounded-md text-sm font-medium">
+                      {event.playlist[0]}
+                    </span>
+                  </div>
+                  {event.link && (
+                    <a 
+                      href={event.link} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-blue-600 text-sm font-medium hover:text-blue-700 hover:underline"
+                    >
+                      More info →
+                    </a>
+                  )}
                 </div>
-                {event.link && (
-                  <a 
-                    href={event.link} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-blue-600 text-sm hover:underline"
-                  >
-                    More info →
-                  </a>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </>
   )
