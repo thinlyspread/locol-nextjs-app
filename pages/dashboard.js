@@ -7,7 +7,8 @@ export default function Dashboard() {
   const [userPlaylists, setUserPlaylists] = useState([])
   const [userEvents, setUserEvents] = useState([])
   const [loading, setLoading] = useState(true)
-  const [editingEventId, setEditingEventId] = useState(null)
+  const [editingEvent, setEditingEvent] = useState(null)
+  const [playlistFilter, setPlaylistFilter] = useState('all')
   
   const AIRTABLE_API_KEY = process.env.NEXT_PUBLIC_AIRTABLE_API_KEY
   const AIRTABLE_BASE_ID = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID
@@ -36,8 +37,10 @@ export default function Dashboard() {
       const usersData = await usersRes.json()
 
       const playlistIdToHandle = {}
+      const playlistIdToName = {}
       playlistsData.records.forEach(p => {
         playlistIdToHandle[p.id] = p.fields.Handle
+        playlistIdToName[p.id] = p.fields['Playlist Name']
       })
 
       const userIdToName = {}
@@ -59,16 +62,14 @@ export default function Dashboard() {
         date: record.fields.When,
         link: record.fields.Link,
         playlist: record.fields.Playlist?.map(id => playlistIdToHandle[id]) || [],
+        playlistIds: record.fields.Playlist || [],
+        playlistNames: record.fields.Playlist?.map(id => playlistIdToName[id]) || [],
         submittedBy: record.fields.Submitted_By?.map(id => userIdToName[id]) || [],
         verificationStatus: record.fields.Playlist_Verification_Status
       }))
 
       const myPlaylists = transformedPlaylists.filter(p => p.owner.includes(CURRENT_USER))
       const myEvents = transformedEvents.filter(e => e.submittedBy?.includes(CURRENT_USER))
-
-      console.log('All events:', transformedEvents.length)
-      console.log('My events:', myEvents.length)
-      console.log('Sample event submittedBy:', transformedEvents[0]?.submittedBy)
 
       setUserPlaylists(myPlaylists)
       setUserEvents(myEvents)
@@ -117,10 +118,54 @@ export default function Dashboard() {
 
       alert('Event saved successfully!')
       e.target.reset()
+      setEditingEvent(null)
       fetchUserData()
     } catch (error) {
       console.error('Error saving event:', error)
       alert('Error saving event: ' + error.message)
+    }
+  }
+
+  async function handleUpdateEvent(e) {
+    e.preventDefault()
+    const formData = new FormData(e.target)
+    
+    const playlistHandle = formData.get('playlist')
+    const playlist = userPlaylists.find(p => p.handle === playlistHandle)
+    
+    if (!playlist) {
+      alert('Playlist not found')
+      return
+    }
+
+    try {
+      const response = await fetch(
+        `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Events/${editingEvent.id}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            fields: {
+              'Event': formData.get('event'),
+              'When': formData.get('when'),
+              'Link': formData.get('link') || '',
+              'Playlist': [playlist.id]
+            }
+          })
+        }
+      )
+
+      if (!response.ok) throw new Error('Failed to update event')
+
+      alert('Event updated successfully!')
+      setEditingEvent(null)
+      fetchUserData()
+    } catch (error) {
+      console.error('Error updating event:', error)
+      alert('Error updating event: ' + error.message)
     }
   }
 
@@ -146,10 +191,34 @@ export default function Dashboard() {
     }
   }
 
+  function startEdit(event) {
+    setEditingEvent(event)
+    document.getElementById('eventForm').scrollIntoView({ behavior: 'smooth' })
+  }
+
+  function cancelEdit() {
+    setEditingEvent(null)
+  }
+
   function formatDate(dateString) {
     const date = new Date(dateString)
     return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
   }
+
+  // Filter events by playlist
+  const filteredEvents = playlistFilter === 'all' 
+    ? userEvents 
+    : userEvents.filter(e => e.playlist.includes(playlistFilter))
+
+  // Group playlists by type (API vs Manual)
+  const apiPlaylists = userPlaylists.filter(p => 
+    p.handle.toLowerCase().includes('ticketmaster') || 
+    p.handle.toLowerCase().includes('eventbrite')
+  )
+  const manualPlaylists = userPlaylists.filter(p => 
+    !p.handle.toLowerCase().includes('ticketmaster') && 
+    !p.handle.toLowerCase().includes('eventbrite')
+  )
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="text-gray-600">Loading...</div></div>
 
@@ -192,31 +261,70 @@ export default function Dashboard() {
           {/* My Playlists */}
           <section className="mb-12">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">My Playlists</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {userPlaylists.map(playlist => {
-                const status = Array.isArray(playlist.verificationStatus) 
-                  ? playlist.verificationStatus[0] 
-                  : playlist.verificationStatus
-                const eventCount = userEvents.filter(e => e.playlist.includes(playlist.handle)).length
-                
-                return (
-                  <div key={playlist.id} className="bg-white border border-gray-200 rounded-lg p-6">
-                    <div className="text-lg font-bold text-blue-600 mb-1">{playlist.handle}</div>
-                    <div className="text-sm text-gray-600 mb-4">{playlist.name}</div>
-                    <div className="flex justify-between items-center">
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                        status === 'Verified' 
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {status}
-                      </span>
-                      <span className="text-sm text-gray-600">{eventCount} events</span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+            
+            {/* Manual Playlists */}
+            {manualPlaylists.length > 0 && (
+              <>
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Manual Curation</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  {manualPlaylists.map(playlist => {
+                    const status = Array.isArray(playlist.verificationStatus) 
+                      ? playlist.verificationStatus[0] 
+                      : playlist.verificationStatus
+                    const eventCount = userEvents.filter(e => e.playlist.includes(playlist.handle)).length
+                    
+                    return (
+                      <div key={playlist.id} className="bg-white border border-gray-200 rounded-lg p-6">
+                        <div className="text-lg font-bold text-blue-600 mb-1">{playlist.handle}</div>
+                        <div className="text-sm text-gray-600 mb-4">{playlist.name}</div>
+                        <div className="flex justify-between items-center">
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                            status === 'Verified' 
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {status}
+                          </span>
+                          <span className="text-sm text-gray-600">{eventCount} events</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+
+            {/* API Playlists */}
+            {apiPlaylists.length > 0 && (
+              <>
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">API Synced</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {apiPlaylists.map(playlist => {
+                    const status = Array.isArray(playlist.verificationStatus) 
+                      ? playlist.verificationStatus[0] 
+                      : playlist.verificationStatus
+                    const eventCount = userEvents.filter(e => e.playlist.includes(playlist.handle)).length
+                    
+                    return (
+                      <div key={playlist.id} className="bg-white border border-gray-200 rounded-lg p-6">
+                        <div className="text-lg font-bold text-purple-600 mb-1">{playlist.handle}</div>
+                        <div className="text-sm text-gray-600 mb-4">{playlist.name}</div>
+                        <div className="flex justify-between items-center">
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                            status === 'Verified' 
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {status}
+                          </span>
+                          <span className="text-sm text-gray-600">{eventCount} events</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
           </section>
 
           {/* My Events */}
@@ -224,11 +332,31 @@ export default function Dashboard() {
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-gray-900">My Events</h2>
               <button 
-                onClick={() => document.getElementById('eventForm').scrollIntoView({ behavior: 'smooth' })}
+                onClick={() => {
+                  setEditingEvent(null)
+                  document.getElementById('eventForm').scrollIntoView({ behavior: 'smooth' })
+                }}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium transition"
               >
                 + Add Event
               </button>
+            </div>
+
+            {/* Playlist Filter */}
+            <div className="mb-6">
+              <label className="text-sm font-medium text-gray-700 block mb-2">Filter by playlist:</label>
+              <select
+                value={playlistFilter}
+                onChange={(e) => setPlaylistFilter(e.target.value)}
+                className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All playlists ({userEvents.length} events)</option>
+                {userPlaylists.map(p => (
+                  <option key={p.id} value={p.handle}>
+                    {p.handle} ({userEvents.filter(e => e.playlist.includes(p.handle)).length} events)
+                  </option>
+                ))}
+              </select>
             </div>
             
             <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -244,12 +372,12 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {userEvents.length === 0 ? (
+                    {filteredEvents.length === 0 ? (
                       <tr>
                         <td colSpan="5" className="px-6 py-12 text-center text-gray-500">No events yet</td>
                       </tr>
                     ) : (
-                      userEvents.map(event => {
+                      filteredEvents.map(event => {
                         const status = Array.isArray(event.verificationStatus) 
                           ? event.verificationStatus[0] 
                           : event.verificationStatus
@@ -269,12 +397,20 @@ export default function Dashboard() {
                               </span>
                             </td>
                             <td className="px-6 py-4">
-                              <button 
-                                onClick={() => deleteEvent(event.id)}
-                                className="text-red-600 hover:text-red-800 text-sm font-medium"
-                              >
-                                Delete
-                              </button>
+                              <div className="flex gap-3">
+                                <button 
+                                  onClick={() => startEdit(event)}
+                                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                >
+                                  Edit
+                                </button>
+                                <button 
+                                  onClick={() => deleteEvent(event.id)}
+                                  className="text-red-600 hover:text-red-800 text-sm font-medium"
+                                >
+                                  Delete
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         )
@@ -286,15 +422,19 @@ export default function Dashboard() {
             </div>
           </section>
 
-          {/* Add Event Form */}
+          {/* Add/Edit Event Form */}
           <section className="bg-white border border-gray-200 rounded-lg p-8" id="eventForm">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Add New Event</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">
+              {editingEvent ? 'Edit Event' : 'Add New Event'}
+            </h2>
             
-            <form onSubmit={handleCreateEvent} className="space-y-6">
-              <div>
+            <form onSubmit={editingEvent ? handleUpdateEvent : handleCreateEvent} className="space-y-6">
+			  <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">Select Playlist*</label>
                 <select 
                   name="playlist" 
+                  key={editingEvent?.id || 'new'} // Force re-render when editing changes
+                  defaultValue={editingEvent?.playlist[0] || ''}
                   className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
                 >
@@ -310,6 +450,7 @@ export default function Dashboard() {
                 <input 
                   type="text" 
                   name="event"
+                  defaultValue={editingEvent ? editingEvent.title : ''}
                   placeholder="e.g., Summer Music Festival" 
                   className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required 
@@ -321,6 +462,7 @@ export default function Dashboard() {
                 <input 
                   type="date" 
                   name="when"
+                  defaultValue={editingEvent ? editingEvent.date : ''}
                   className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required 
                 />
@@ -331,6 +473,7 @@ export default function Dashboard() {
                 <input 
                   type="url" 
                   name="link"
+                  defaultValue={editingEvent ? editingEvent.link : ''}
                   placeholder="https://example.com" 
                   className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
@@ -341,10 +484,20 @@ export default function Dashboard() {
                   type="submit" 
                   className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold transition"
                 >
-                  Submit Event
+                  {editingEvent ? 'Update Event' : 'Submit Event'}
                 </button>
+                {editingEvent && (
+                  <button 
+                    type="button"
+                    onClick={cancelEdit}
+                    className="bg-white text-gray-700 border border-gray-300 px-6 py-3 rounded-lg hover:bg-gray-50 font-semibold transition"
+                  >
+                    Cancel Edit
+                  </button>
+                )}
                 <button 
                   type="reset" 
+                  onClick={() => setEditingEvent(null)}
                   className="bg-white text-gray-700 border border-gray-300 px-6 py-3 rounded-lg hover:bg-gray-50 font-semibold transition"
                 >
                   Clear Form
