@@ -161,9 +161,9 @@ export default function Home() {
     .sort((a, b) => new Date(a.date) - new Date(b.date))
 
   function formatDate(dateString) {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
-  }
+      const date = new Date(dateString)
+      return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }).toUpperCase()
+    }
 
   return (
     <>
@@ -202,66 +202,67 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Filters - REORDERED */}
-      <div className="bg-gray-50 border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <label className="text-sm font-medium text-gray-700 block mb-3">Filter:</label>
-          <div className="flex flex-wrap gap-2">
-            {/* All events button */}
-            <button
-              onClick={() => toggleFilter('all')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-                activeFilters.has('all')
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 border border-gray-300 hover:border-gray-400'
-              }`}
-            >
-              All events
-            </button>
+			{/* Filters - COMPACT */}
+			      <div className="bg-gray-50 border-b border-gray-200">
+			        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+			          <label className="text-sm font-medium text-gray-700 block mb-2">Filter:</label>
+          
+			          {/* Date filters - always visible */}
+			          <div className="flex flex-wrap gap-2 mb-3">
+			            <button
+			              onClick={() => toggleFilter('all')}
+			              className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
+			                activeFilters.has('all')
+			                  ? 'bg-blue-600 text-white'
+			                  : 'bg-white text-gray-700 border border-gray-300 hover:border-gray-400'
+			              }`}
+			            >
+			              All events
+			            </button>
 
-            {/* Date filters (# tags) - NOW FIRST */}
-            <button
-              onClick={() => toggleFilter('#today')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-                activeFilters.has('#today')
-                  ? 'bg-green-600 text-white border-green-600'
-                  : 'bg-white text-green-700 border border-green-600 hover:bg-green-50'
-              }`}
-            >
-              #Today
-            </button>
+			            <button
+			              onClick={() => toggleFilter('#today')}
+			              className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
+			                activeFilters.has('#today')
+			                  ? 'bg-green-600 text-white border-green-600'
+			                  : 'bg-white text-green-700 border border-green-600 hover:bg-green-50'
+			              }`}
+			            >
+			              #Today
+			            </button>
 
-            <button
-              onClick={() => toggleFilter('#tomorrow')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-                activeFilters.has('#tomorrow')
-                  ? 'bg-green-600 text-white border-green-600'
-                  : 'bg-white text-green-700 border border-green-600 hover:bg-green-50'
-              }`}
-            >
-              #Tomorrow
-            </button>
+			            <button
+			              onClick={() => toggleFilter('#tomorrow')}
+			              className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
+			                activeFilters.has('#tomorrow')
+			                  ? 'bg-green-600 text-white border-green-600'
+			                  : 'bg-white text-green-700 border border-green-600 hover:bg-green-50'
+			              }`}
+			            >
+			              #Tomorrow
+			            </button>
+			          </div>
 
-            {/* Divider */}
-            <div className="w-full border-t border-gray-300 my-2"></div>
-
-            {/* Playlist filters (@ tags) - NOW SECOND */}
-            {playlists.map(playlist => (
-              <button
-                key={playlist.id}
-                onClick={() => toggleFilter(playlist.handle)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-                  activeFilters.has(playlist.handle)
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-700 border border-gray-300 hover:border-gray-400'
-                }`}
-              >
-                {playlist.handle}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+			          {/* Playlist filters - horizontal scroll */}
+			          <div className="overflow-x-auto pb-2">
+			            <div className="flex gap-2 min-w-max">
+			              {playlists.map(playlist => (
+			                <button
+			                  key={playlist.id}
+			                  onClick={() => toggleFilter(playlist.handle)}
+			                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition whitespace-nowrap ${
+			                    activeFilters.has(playlist.handle)
+			                      ? 'bg-blue-600 text-white'
+			                      : 'bg-white text-gray-700 border border-gray-300 hover:border-gray-400'
+			                  }`}
+			                >
+			                  {playlist.handle}
+			                </button>
+			              ))}
+			            </div>
+			          </div>
+			        </div>
+			      </div>
 
   <div className="bg-gray-50 min-h-screen">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -271,29 +272,38 @@ export default function Home() {
               <div className="text-center py-12 text-gray-600">Loading...</div>
             ) : (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {filteredEvents.slice(0, displayCount).map(event => (
-                    <div key={event.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-3 leading-snug">{event.title}</h3>
-                      <div className="flex flex-col gap-2 mb-4">
-                        <span className="text-sm text-gray-600">{formatDate(event.date)}</span>
-                        <span className="inline-block w-fit px-3 py-1 bg-blue-50 text-blue-700 rounded-md text-sm font-medium">
-                          {event.playlist[0]}
-                        </span>
-                      </div>
+<div className="max-w-3xl mx-auto space-y-3">
+                {filteredEvents.slice(0, displayCount).map(event => (
+                  <div key={event.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition">
+					<h3 className="text-base font-semibold text-gray-900 mb-2 leading-tight">
+                      {event.title}
+                    </h3>
+                    <div className="flex items-center gap-2 text-sm text-gray-600 flex-wrap">
+                      <span>{formatDate(event.date)}</span>
+                      <span>•</span>
+					  <button 
+                        onClick={() => toggleFilter(event.playlist[0])}
+                        className="text-blue-600 font-medium hover:underline hover:text-blue-700 transition"
+                      >
+                        {event.playlist[0]}
+                      </button>
                       {event.link && (
-                        <a 
-                          href={event.link} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-blue-600 text-sm font-medium hover:text-blue-700 hover:underline"
-                        >
-                          More info →
-                        </a>
+                        <>
+                          <span>•</span>
+                          <a 
+                            href={event.link} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-700 hover:underline font-medium"
+                          >
+                            More info →
+                          </a>
+                        </>
                       )}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
+              </div>
 
                 {/* Load More button */}
                 {filteredEvents.length > displayCount && (
