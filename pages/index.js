@@ -78,17 +78,17 @@ export default function Home() {
     }
   }
 
-  function toggleFilter(playlist) {
+  function toggleFilter(filter) {
     const newFilters = new Set(activeFilters)
     
-    if (playlist === 'all') {
+    if (filter === 'all') {
       setActiveFilters(new Set(['all']))
     } else {
       newFilters.delete('all')
-      if (newFilters.has(playlist)) {
-        newFilters.delete(playlist)
+      if (newFilters.has(filter)) {
+        newFilters.delete(filter)
       } else {
-        newFilters.add(playlist)
+        newFilters.add(filter)
       }
       if (newFilters.size === 0) {
         setActiveFilters(new Set(['all']))
@@ -99,13 +99,49 @@ export default function Home() {
   }
 
   const filteredEvents = events.filter(event => {
-    const matchesPlaylist = activeFilters.has('all') || 
-      event.playlist.some(p => activeFilters.has(p))
-    
+    // Apply search filter first
     const matchesSearch = !searchTerm || 
       event.title.toLowerCase().includes(searchTerm.toLowerCase())
     
-    return matchesPlaylist && matchesSearch
+    // Apply date filters
+    let matchesDate = true
+    const hasDateFilter = activeFilters.has('#today') || activeFilters.has('#tomorrow')
+    
+    if (hasDateFilter) {
+      const eventDate = new Date(event.date + 'T00:00:00')
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      
+      const tomorrow = new Date(today)
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      
+      const eventTime = eventDate.getTime()
+      const todayTime = today.getTime()
+      const tomorrowTime = tomorrow.getTime()
+      
+      if (activeFilters.has('#today') && activeFilters.has('#tomorrow')) {
+        matchesDate = eventTime === todayTime || eventTime === tomorrowTime
+      } else if (activeFilters.has('#today')) {
+        matchesDate = eventTime === todayTime
+      } else if (activeFilters.has('#tomorrow')) {
+        matchesDate = eventTime === tomorrowTime
+      }
+    }
+    
+    // Apply playlist filters ONLY if no date filter is active
+    let matchesPlaylist = true
+    if (!hasDateFilter) {
+      matchesPlaylist = activeFilters.has('all') || 
+        event.playlist.some(p => activeFilters.has(p))
+    } else {
+      // If date filter active, check if ANY playlist filter is active
+      const playlistFilters = Array.from(activeFilters).filter(f => f.startsWith('@'))
+      if (playlistFilters.length > 0) {
+        matchesPlaylist = event.playlist.some(p => activeFilters.has(p))
+      }
+    }
+    
+    return matchesPlaylist && matchesSearch && matchesDate
   })
 
   function formatDate(dateString) {
@@ -153,11 +189,12 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Playlist Filters */}
+      {/* Filters */}
       <div className="bg-gray-50 border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <label className="text-sm font-medium text-gray-700 block mb-3">Filter by playlist:</label>
+          <label className="text-sm font-medium text-gray-700 block mb-3">Filter:</label>
           <div className="flex flex-wrap gap-2">
+            {/* All events button */}
             <button
               onClick={() => toggleFilter('all')}
               className={`px-4 py-2 rounded-full text-sm font-medium transition ${
@@ -168,6 +205,8 @@ export default function Home() {
             >
               All events
             </button>
+
+            {/* Playlist filters (@ tags) */}
             {playlists.map(playlist => (
               <button
                 key={playlist.id}
@@ -181,6 +220,32 @@ export default function Home() {
                 {playlist.handle}
               </button>
             ))}
+
+            {/* Divider */}
+            <div className="w-full border-t border-gray-300 my-2"></div>
+
+            {/* Date filters (# tags) */}
+            <button
+              onClick={() => toggleFilter('#today')}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+                activeFilters.has('#today')
+                  ? 'bg-green-600 text-white border-green-600'
+                  : 'bg-white text-green-700 border border-green-600 hover:bg-green-50'
+              }`}
+            >
+              #Today
+            </button>
+
+            <button
+              onClick={() => toggleFilter('#tomorrow')}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+                activeFilters.has('#tomorrow')
+                  ? 'bg-green-600 text-white border-green-600'
+                  : 'bg-white text-green-700 border border-green-600 hover:bg-green-50'
+              }`}
+            >
+              #Tomorrow
+            </button>
           </div>
         </div>
       </div>
