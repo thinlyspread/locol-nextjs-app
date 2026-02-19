@@ -4,9 +4,10 @@ import Head from 'next/head'
 export default function Home() {
   const [events, setEvents] = useState([])
   const [playlists, setPlaylists] = useState([])
-  const [activeFilters, setActiveFilters] = useState(new Set(['all']))
+  const [activeFilters, setActiveFilters] = useState(new Set(['#today', '#tomorrow']))
   const [searchTerm, setSearchTerm] = useState('')
   const [loading, setLoading] = useState(true)
+  const [displayCount, setDisplayCount] = useState(50)
 
   const AIRTABLE_API_KEY = process.env.NEXT_PUBLIC_AIRTABLE_API_KEY
   const AIRTABLE_BASE_ID = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID
@@ -17,33 +18,44 @@ export default function Home() {
 
   async function fetchData() {
     try {
-      const [eventsRes, playlistsRes, usersRes] = await Promise.all([
-        fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Events`, {
-          headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` }
-        }),
-        fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Playlists`, {
-          headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` }
-        }),
-        fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Users`, {
-          headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` }
-        })
+      async function fetchAllRecords(tableName) {
+        let allRecords = []
+        let offset = null
+        
+        do {
+          const url = offset 
+            ? `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${tableName}?offset=${offset}`
+            : `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${tableName}`
+          
+          const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` }
+          })
+          
+          const data = await response.json()
+          allRecords = allRecords.concat(data.records)
+          offset = data.offset
+        } while (offset)
+        
+        return allRecords
+      }
+
+      const [eventsRecords, playlistsRecords, usersRecords] = await Promise.all([
+        fetchAllRecords('Events'),
+        fetchAllRecords('Playlists'),
+        fetchAllRecords('Users')
       ])
 
-      const eventsData = await eventsRes.json()
-      const playlistsData = await playlistsRes.json()
-      const usersData = await usersRes.json()
-
       const playlistIdToHandle = {}
-      playlistsData.records.forEach(p => {
+      playlistsRecords.forEach(p => {
         playlistIdToHandle[p.id] = p.fields.Handle
       })
 
       const userIdToName = {}
-      usersData.records.forEach(u => {
+      usersRecords.forEach(u => {
         userIdToName[u.id] = u.fields['User Name']
       })
 
-      const transformedEvents = eventsData.records.map(record => ({
+      const transformedEvents = eventsRecords.map(record => ({
         id: record.id,
         title: record.fields.Event,
         date: record.fields.When,
@@ -52,7 +64,7 @@ export default function Home() {
         verificationStatus: record.fields.Playlist_Verification_Status
       }))
 
-      const transformedPlaylists = playlistsData.records.map(record => ({
+      const transformedPlaylists = playlistsRecords.map(record => ({
         id: record.id,
         handle: record.fields.Handle,
         name: record.fields['Playlist Name'],
@@ -98,12 +110,17 @@ export default function Home() {
     }
   }
 
-  const filteredEvents = events.filter(event => {
-    // Apply search filter first
-    const matchesSearch = !searchTerm || 
+	const filteredEvents = events
+    	.filter(event => {    const matchesSearch = !searchTerm || 
       event.title.toLowerCase().includes(searchTerm.toLowerCase())
+			
+// Hide events older than yesterday
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    yesterday.setHours(0, 0, 0, 0)
+    const eventDate = new Date(event.date + 'T00:00:00')
+    const isNotTooOld = eventDate >= yesterday
     
-    // Apply date filters
     let matchesDate = true
     const hasDateFilter = activeFilters.has('#today') || activeFilters.has('#tomorrow')
     
@@ -128,21 +145,20 @@ export default function Home() {
       }
     }
     
-    // Apply playlist filters ONLY if no date filter is active
     let matchesPlaylist = true
     if (!hasDateFilter) {
       matchesPlaylist = activeFilters.has('all') || 
         event.playlist.some(p => activeFilters.has(p))
     } else {
-      // If date filter active, check if ANY playlist filter is active
       const playlistFilters = Array.from(activeFilters).filter(f => f.startsWith('@'))
       if (playlistFilters.length > 0) {
         matchesPlaylist = event.playlist.some(p => activeFilters.has(p))
       }
     }
     
-    return matchesPlaylist && matchesSearch && matchesDate
+    return matchesPlaylist && matchesSearch && matchesDate && isNotTooOld
   })
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
 
   function formatDate(dateString) {
     const date = new Date(dateString)
@@ -155,7 +171,6 @@ export default function Home() {
         <title>LOCOL - What's on?</title>
       </Head>
 
-      {/* Navigation */}
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
@@ -168,7 +183,6 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">What's on?</h1>
@@ -176,7 +190,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Search */}
       <div className="bg-gray-50 border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <input
@@ -189,7 +202,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Filters - REORDERED */}
       <div className="bg-gray-50 border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <label className="text-sm font-medium text-gray-700 block mb-3">Filter:</label>
@@ -206,25 +219,7 @@ export default function Home() {
               All events
             </button>
 
-            {/* Playlist filters (@ tags) */}
-            {playlists.map(playlist => (
-              <button
-                key={playlist.id}
-                onClick={() => toggleFilter(playlist.handle)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-                  activeFilters.has(playlist.handle)
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-700 border border-gray-300 hover:border-gray-400'
-                }`}
-              >
-                {playlist.handle}
-              </button>
-            ))}
-
-            {/* Divider */}
-            <div className="w-full border-t border-gray-300 my-2"></div>
-
-            {/* Date filters (# tags) */}
+            {/* Date filters (# tags) - NOW FIRST */}
             <button
               onClick={() => toggleFilter('#today')}
               className={`px-4 py-2 rounded-full text-sm font-medium transition ${
@@ -246,44 +241,75 @@ export default function Home() {
             >
               #Tomorrow
             </button>
+
+            {/* Divider */}
+            <div className="w-full border-t border-gray-300 my-2"></div>
+
+            {/* Playlist filters (@ tags) - NOW SECOND */}
+            {playlists.map(playlist => (
+              <button
+                key={playlist.id}
+                onClick={() => toggleFilter(playlist.handle)}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+                  activeFilters.has(playlist.handle)
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:border-gray-400'
+                }`}
+              >
+                {playlist.handle}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Events Grid */}
-      <div className="bg-gray-50 min-h-screen">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <p className="text-sm text-gray-600 mb-6">{filteredEvents.length} events</p>
+  <div className="bg-gray-50 min-h-screen">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <p className="text-sm text-gray-600 mb-6">{filteredEvents.length} events</p>
           
-          {loading ? (
-            <div className="text-center py-12 text-gray-600">Loading...</div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredEvents.map(event => (
-                <div key={event.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3 leading-snug">{event.title}</h3>
-                  <div className="flex flex-col gap-2 mb-4">
-                    <span className="text-sm text-gray-600">{formatDate(event.date)}</span>
-                    <span className="inline-block w-fit px-3 py-1 bg-blue-50 text-blue-700 rounded-md text-sm font-medium">
-                      {event.playlist[0]}
-                    </span>
-                  </div>
-                  {event.link && (
-                    <a 
-                      href={event.link} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-blue-600 text-sm font-medium hover:text-blue-700 hover:underline"
-                    >
-                      More info →
-                    </a>
-                  )}
+            {loading ? (
+              <div className="text-center py-12 text-gray-600">Loading...</div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredEvents.slice(0, displayCount).map(event => (
+                    <div key={event.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-3 leading-snug">{event.title}</h3>
+                      <div className="flex flex-col gap-2 mb-4">
+                        <span className="text-sm text-gray-600">{formatDate(event.date)}</span>
+                        <span className="inline-block w-fit px-3 py-1 bg-blue-50 text-blue-700 rounded-md text-sm font-medium">
+                          {event.playlist[0]}
+                        </span>
+                      </div>
+                      {event.link && (
+                        <a 
+                          href={event.link} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 text-sm font-medium hover:text-blue-700 hover:underline"
+                        >
+                          More info →
+                        </a>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
+
+                {/* Load More button */}
+                {filteredEvents.length > displayCount && (
+                  <div className="text-center mt-8">
+                    <button
+                      onClick={() => setDisplayCount(prev => prev + 50)}
+                      className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium transition"
+                    >
+                      Load More ({filteredEvents.length - displayCount} remaining)
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
-      </div>
-    </>
+      </>
   )
 }

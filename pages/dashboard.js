@@ -9,6 +9,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [editingEvent, setEditingEvent] = useState(null)
   const [playlistFilter, setPlaylistFilter] = useState('all')
+  const [displayCount, setDisplayCount] = useState(50)
   
   const AIRTABLE_API_KEY = process.env.NEXT_PUBLIC_AIRTABLE_API_KEY
   const AIRTABLE_BASE_ID = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID
@@ -20,35 +21,46 @@ export default function Dashboard() {
 
   async function fetchUserData() {
     try {
-      const [eventsRes, playlistsRes, usersRes] = await Promise.all([
-        fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Events`, {
-          headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` }
-        }),
-        fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Playlists`, {
-          headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` }
-        }),
-        fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Users`, {
-          headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` }
-        })
-      ])
+      async function fetchAllRecords(tableName) {
+        let allRecords = []
+        let offset = null
+        
+        do {
+          const url = offset 
+            ? `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${tableName}?offset=${offset}`
+            : `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${tableName}`
+          
+          const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` }
+          })
+          
+          const data = await response.json()
+          allRecords = allRecords.concat(data.records)
+          offset = data.offset
+        } while (offset)
+        
+        return allRecords
+      }
 
-      const eventsData = await eventsRes.json()
-      const playlistsData = await playlistsRes.json()
-      const usersData = await usersRes.json()
+      const [eventsRecords, playlistsRecords, usersRecords] = await Promise.all([
+        fetchAllRecords('Events'),
+        fetchAllRecords('Playlists'),
+        fetchAllRecords('Users')
+      ])
 
       const playlistIdToHandle = {}
       const playlistIdToName = {}
-      playlistsData.records.forEach(p => {
+      playlistsRecords.forEach(p => {
         playlistIdToHandle[p.id] = p.fields.Handle
         playlistIdToName[p.id] = p.fields['Playlist Name']
       })
 
       const userIdToName = {}
-      usersData.records.forEach(u => {
+      usersRecords.forEach(u => {
         userIdToName[u.id] = u.fields['User Name']
       })
 
-      const transformedPlaylists = playlistsData.records.map(record => ({
+      const transformedPlaylists = playlistsRecords.map(record => ({
         id: record.id,
         handle: record.fields.Handle,
         name: record.fields['Playlist Name'],
@@ -56,7 +68,7 @@ export default function Dashboard() {
         verificationStatus: record.fields.Playlist_Verification_Status
       }))
 
-      const transformedEvents = eventsData.records.map(record => ({
+      const transformedEvents = eventsRecords.map(record => ({
         id: record.id,
         title: record.fields.Event,
         date: record.fields.When,
@@ -205,12 +217,10 @@ export default function Dashboard() {
     return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
   }
 
-  // Filter events by playlist
   const filteredEvents = playlistFilter === 'all' 
     ? userEvents 
     : userEvents.filter(e => e.playlist.includes(playlistFilter))
 
-  // Group playlists by type (API vs Manual)
   const apiPlaylists = userPlaylists.filter(p => 
     p.handle.toLowerCase().includes('ticketmaster') || 
     p.handle.toLowerCase().includes('eventbrite')
@@ -228,7 +238,6 @@ export default function Dashboard() {
         <title>Dashboard - LOCOL</title>
       </Head>
 
-      {/* Navigation */}
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
@@ -252,17 +261,14 @@ export default function Dashboard() {
       <div className="bg-gray-50 min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           
-          {/* Header */}
           <div className="mb-8">
             <h1 className="text-4xl font-bold text-gray-900 mb-2">Dashboard</h1>
             <p className="text-gray-600">Manage your playlists and events</p>
           </div>
 
-          {/* My Playlists */}
           <section className="mb-12">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">My Playlists</h2>
             
-            {/* Manual Playlists */}
             {manualPlaylists.length > 0 && (
               <>
                 <h3 className="text-sm font-semibold text-gray-700 mb-3">Manual Curation</h3>
@@ -294,7 +300,6 @@ export default function Dashboard() {
               </>
             )}
 
-            {/* API Playlists */}
             {apiPlaylists.length > 0 && (
               <>
                 <h3 className="text-sm font-semibold text-gray-700 mb-3">API Synced</h3>
@@ -327,7 +332,6 @@ export default function Dashboard() {
             )}
           </section>
 
-          {/* My Events */}
           <section className="mb-12">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-gray-900">My Events</h2>
@@ -342,7 +346,6 @@ export default function Dashboard() {
               </button>
             </div>
 
-            {/* Playlist Filter */}
             <div className="mb-6">
               <label className="text-sm font-medium text-gray-700 block mb-2">Filter by playlist:</label>
               <select
@@ -372,12 +375,12 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredEvents.length === 0 ? (
+                    {filteredEvents.slice(0, displayCount).length === 0 ? (
                       <tr>
                         <td colSpan="5" className="px-6 py-12 text-center text-gray-500">No events yet</td>
                       </tr>
                     ) : (
-                      filteredEvents.map(event => {
+                      filteredEvents.slice(0, displayCount).map(event => {
                         const status = Array.isArray(event.verificationStatus) 
                           ? event.verificationStatus[0] 
                           : event.verificationStatus
@@ -420,20 +423,31 @@ export default function Dashboard() {
                 </table>
               </div>
             </div>
+
+            {/* Load More button */}
+            {filteredEvents.length > displayCount && (
+              <div className="text-center mt-6">
+                <button
+                  onClick={() => setDisplayCount(prev => prev + 50)}
+                  className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium transition"
+                >
+                  Load More ({filteredEvents.length - displayCount} remaining)
+                </button>
+              </div>
+            )}
           </section>
 
-          {/* Add/Edit Event Form */}
           <section className="bg-white border border-gray-200 rounded-lg p-8" id="eventForm">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">
               {editingEvent ? 'Edit Event' : 'Add New Event'}
             </h2>
             
             <form onSubmit={editingEvent ? handleUpdateEvent : handleCreateEvent} className="space-y-6">
-			  <div>
+              <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">Select Playlist*</label>
                 <select 
                   name="playlist" 
-                  key={editingEvent?.id || 'new'} // Force re-render when editing changes
+                  key={editingEvent?.id || 'new'}
                   defaultValue={editingEvent?.playlist[0] || ''}
                   className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
