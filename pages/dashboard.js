@@ -10,6 +10,8 @@ export default function Dashboard() {
   const [editingEvent, setEditingEvent] = useState(null)
   const [playlistFilters, setPlaylistFilters] = useState(new Set(['all']))
   const [displayCount, setDisplayCount] = useState(50)
+  const [isAddingInline, setIsAddingInline] = useState(false)
+  const [newEvent, setNewEvent] = useState({ event: '', when: '', link: '', playlist: '' })
   
   const AIRTABLE_API_KEY = process.env.NEXT_PUBLIC_AIRTABLE_API_KEY
   const AIRTABLE_BASE_ID = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID
@@ -371,10 +373,11 @@ const filteredEvents = playlistFilters.has('all')
           <section className="mb-12">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-gray-900">My Events</h2>
-              <button 
+              <button
                 onClick={() => {
+                  setIsAddingInline(true)
                   setEditingEvent(null)
-                  document.getElementById('eventForm').scrollIntoView({ behavior: 'smooth' })
+                  setNewEvent({ event: '', when: '', link: '', playlist: '' })
                 }}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium transition"
               >
