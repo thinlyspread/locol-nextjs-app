@@ -3,16 +3,24 @@ export default async function handler(req, res) {
   const AIRTABLE_BASE_ID = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID
 
   try {
-    // Get all Approved items from Staging that aren't published yet
-    const stagingRes = await fetch(
-      `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Staging?filterByFormula=AND(Status='Approved', {Published Event ID}=BLANK())`,
-      { headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` } }
-    )
-    const stagingData = await stagingRes.json()
-    console.log('Found records to publish:', stagingData.records?.length || 0)
-    console.log('Filter used:', `AND(Status='Approved', {Published Event ID}=BLANK())`)
+    // Get all Approved items from Staging with pagination
+    let allRecords = []
+    let offset = null
 
-    if (stagingData.records.length === 0) {
+    do {
+      const url = offset
+        ? `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Staging?filterByFormula=AND(Status='Approved', {Published Event ID}=BLANK())&offset=${offset}`
+        : `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Staging?filterByFormula=AND(Status='Approved', {Published Event ID}=BLANK())`
+
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` }
+      })
+      const data = await response.json()
+      allRecords = allRecords.concat(data.records)
+      offset = data.offset
+    } while (offset)
+
+    if (allRecords.length === 0) {
       return res.json({ success: true, published: 0, message: 'No new events to publish' })
     }
 
@@ -28,7 +36,7 @@ export default async function handler(req, res) {
     })
 
     // Create records in Events table
-    const eventsToCreate = stagingData.records.map(r => ({
+    const eventsToCreate = allRecords.map(r => ({
       fields: {
         'Event': r.fields.Event,
         'When': r.fields.When,
@@ -58,7 +66,7 @@ export default async function handler(req, res) {
 
       // Prepare updates for Staging (link to published event)
       createData.records?.forEach((newEvent, idx) => {
-        const stagingRecord = stagingData.records[i + idx]
+        const stagingRecord = allRecords[i + idx]
         updates.push({
           id: stagingRecord.id,
           fields: {

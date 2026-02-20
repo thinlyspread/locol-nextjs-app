@@ -273,32 +273,46 @@ export default function Home() {
             ) : (
               <>
 <div className="max-w-3xl mx-auto space-y-3">
-                {filteredEvents.slice(0, displayCount).map(event => (
-                  <div key={event.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition">
-					<h3 className="text-base font-semibold text-gray-900 mb-2 leading-tight">
-                      {event.title}
-                    </h3>
-                    <div className="flex items-center gap-2 text-sm text-gray-600 flex-wrap">
+                {filteredEvents.slice(0, displayCount).map((event) => (
+                  <div
+                    key={event.id}
+                    className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition cursor-pointer"
+                  >
+                    <h3 className="text-xl font-bold text-gray-900 mb-3">{event.title}</h3>
+
+                    <div className="flex items-center gap-3 text-sm text-gray-600 mb-3">
                       <span>{formatDate(event.date)}</span>
-                      <span>•</span>
-					  <button 
-                        onClick={() => toggleFilter(event.playlist[0])}
-                        className="text-blue-600 font-medium hover:underline hover:text-blue-700 transition"
-                      >
-                        {event.playlist[0]}
-                      </button>
-                      {event.link && (
-                        <>
-                          <span>•</span>
-                          <a 
-                            href={event.link} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-700 hover:underline font-medium"
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {event.playlist.slice(0, 3).map((handle, idx) => (
+                        <div key={idx} className="flex items-center gap-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              toggleFilter(handle)
+                            }}
+                            className="text-blue-600 hover:text-blue-800 font-medium"
                           >
-                            More info →
-                          </a>
-                        </>
+                            {handle}
+                          </button>
+                          {event.link && (
+                            <a
+                              href={event.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-gray-500 hover:text-blue-600"
+                            >
+                              ↗
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                      {event.playlist.length > 3 && (
+                        <span className="text-gray-500 text-sm">
+                          +{event.playlist.length - 3} more
+                        </span>
                       )}
                     </div>
                   </div>
