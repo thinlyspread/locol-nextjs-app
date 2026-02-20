@@ -12,7 +12,9 @@ export default function Dashboard() {
   const [displayCount, setDisplayCount] = useState(50)
   const [isAddingInline, setIsAddingInline] = useState(false)
   const [newEvent, setNewEvent] = useState({ event: '', when: '', link: '', playlist: '' })
-  
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [syncMessage, setSyncMessage] = useState('')
+
   const AIRTABLE_API_KEY = process.env.NEXT_PUBLIC_AIRTABLE_API_KEY
   const AIRTABLE_BASE_ID = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID
   const CURRENT_USER = 'Luc (me)'
@@ -67,7 +69,8 @@ export default function Dashboard() {
         handle: record.fields.Handle,
         name: record.fields['Playlist Name'],
         owner: record.fields['Playlist Owner']?.map(id => userIdToName[id]) || [],
-        verificationStatus: record.fields.Playlist_Verification_Status
+        verificationStatus: record.fields.Playlist_Verification_Status,
+        apiSyncEnabled: record.fields['Sync Enabled'] || false
       }))
 
       const transformedEvents = eventsRecords.map(record => ({
@@ -207,7 +210,8 @@ export default function Dashboard() {
 
   function startEdit(event) {
     setEditingEvent(event)
-    document.getElementById('eventForm').scrollIntoView({ behavior: 'smooth' })
+    // TODO: Implement inline editing
+    alert('Inline editing coming soon! For now, please delete and re-add the event.')
   }
 
   function cancelEdit() {
@@ -234,19 +238,64 @@ export default function Dashboard() {
       }
     }
 
+  async function syncAllAPIs() {
+    setIsSyncing(true)
+    setSyncMessage('')
+
+    try {
+      // Get all API-enabled playlists
+      const apiPlaylists = userPlaylists.filter(p => p.apiSyncEnabled)
+
+      if (apiPlaylists.length === 0) {
+        setSyncMessage('⚠ No API playlists enabled for sync')
+        return
+      }
+
+      let totalSynced = 0
+      const results = []
+
+      // Sync Ticketmaster if any Ticketmaster playlists are enabled
+      const ticketmasterPlaylists = apiPlaylists.filter(p =>
+        p.handle.toLowerCase().includes('ticketmaster')
+      )
+
+      if (ticketmasterPlaylists.length > 0) {
+        const response = await fetch('/api/sync-ticketmaster')
+        const data = await response.json()
+
+        if (data.success) {
+          totalSynced += data.synced || 0
+          results.push(`Ticketmaster: ${data.synced}`)
+        } else {
+          results.push(`Ticketmaster: failed`)
+        }
+      }
+
+      // Future: Add more API syncs here (Eventbrite, Skiddle, etc)
+
+      if (results.length > 0) {
+        setSyncMessage(`✓ Synced ${totalSynced} events (${results.join(', ')})`)
+        fetchUserData()
+      }
+    } catch (error) {
+      setSyncMessage(`✗ Sync failed: ${error.message}`)
+    } finally {
+      setIsSyncing(false)
+      setTimeout(() => setSyncMessage(''), 5000)
+    }
+  }
+
   function formatDate(dateString) {
     const date = new Date(dateString)
     return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
   }
 
-const filteredEvents = playlistFilters.has('all')
+const filteredEvents = (playlistFilters.has('all')
     ? userEvents
     : userEvents.filter(e => e.playlist.some(p => playlistFilters.has(p)))
+  ).sort((a, b) => new Date(b.date) - new Date(a.date))
 
-  const apiPlaylists = userPlaylists.filter(p => 
-    p.handle.toLowerCase().includes('ticketmaster') || 
-    p.handle.toLowerCase().includes('eventbrite')
-  )
+  const apiPlaylists = userPlaylists.filter(p => p.apiSyncEnabled)
   const manualPlaylists = userPlaylists.filter(p => 
     !p.handle.toLowerCase().includes('ticketmaster') && 
     !p.handle.toLowerCase().includes('eventbrite')
@@ -332,7 +381,29 @@ const filteredEvents = playlistFilters.has('all')
 
 	              {apiPlaylists.length > 0 && (
 	                <>
-	                  <h3 className="text-sm font-semibold text-gray-700 mb-3">API Synced</h3>
+	                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-sm font-semibold text-gray-700">API Synced</h3>
+                  <button
+                    onClick={syncAllAPIs}
+                    disabled={isSyncing}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                      isSyncing
+                        ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                        : 'bg-purple-600 text-white hover:bg-purple-700'
+                    }`}
+                  >
+                    <span>{isSyncing ? '⟳ Syncing...' : '⟳ Sync All APIs'}</span>
+                  </button>
+                </div>
+                {syncMessage && (
+                  <div className={`text-sm mb-3 px-3 py-2 rounded ${
+                    syncMessage.startsWith('✓')
+                      ? 'bg-green-50 text-green-700'
+                      : 'bg-red-50 text-red-700'
+                  }`}>
+                    {syncMessage}
+                  </div>
+                )}
 	                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
 	                    {apiPlaylists.map(playlist => {
 	                      const status = Array.isArray(playlist.verificationStatus) 
@@ -407,6 +478,7 @@ const filteredEvents = playlistFilters.has('all')
                             placeholder="Event name..."
                             value={newEvent.event}
                             onChange={(e) => setNewEvent({...newEvent, event: e.target.value})}
+                            maxLength={100}
                             className="w-full px-3 py-2 text-sm text-gray-900 bg-white border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                         </td>
@@ -546,88 +618,6 @@ const filteredEvents = playlistFilters.has('all')
             )}
           </section>
 
-          <section className="bg-white border border-gray-200 rounded-lg p-8" id="eventForm">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">
-              {editingEvent ? 'Edit Event' : 'Add New Event'}
-            </h2>
-            
-            <form onSubmit={editingEvent ? handleUpdateEvent : handleCreateEvent} className="space-y-6">
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">Select Playlist*</label>
-                <select 
-                  name="playlist" 
-                  key={editingEvent?.id || 'new'}
-                  defaultValue={editingEvent?.playlist[0] || ''}
-                  className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                >
-                  <option value="">Choose a playlist...</option>
-                  {userPlaylists.map(p => (
-                    <option key={p.id} value={p.handle}>{p.handle}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">Event Name*</label>
-                <input 
-                  type="text" 
-                  name="event"
-                  defaultValue={editingEvent ? editingEvent.title : ''}
-                  placeholder="e.g., Summer Music Festival" 
-                  className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required 
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">Date*</label>
-                <input 
-                  type="date" 
-                  name="when"
-                  defaultValue={editingEvent ? editingEvent.date : ''}
-                  className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required 
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">Event Link (URL)</label>
-                <input 
-                  type="url" 
-                  name="link"
-                  defaultValue={editingEvent ? editingEvent.link : ''}
-                  placeholder="https://example.com" 
-                  className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              <div className="flex gap-4">
-                <button 
-                  type="submit" 
-                  className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold transition"
-                >
-                  {editingEvent ? 'Update Event' : 'Submit Event'}
-                </button>
-                {editingEvent && (
-                  <button 
-                    type="button"
-                    onClick={cancelEdit}
-                    className="bg-white text-gray-700 border border-gray-300 px-6 py-3 rounded-lg hover:bg-gray-50 font-semibold transition"
-                  >
-                    Cancel Edit
-                  </button>
-                )}
-                <button 
-                  type="reset" 
-                  onClick={() => setEditingEvent(null)}
-                  className="bg-white text-gray-700 border border-gray-300 px-6 py-3 rounded-lg hover:bg-gray-50 font-semibold transition"
-                >
-                  Clear Form
-                </button>
-              </div>
-            </form>
-          </section>
         </div>
       </div>
     </>
