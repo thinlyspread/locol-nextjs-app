@@ -271,7 +271,22 @@ export default function Dashboard() {
         }
       }
 
-      // Future: Add more API syncs here (Eventbrite, Skiddle, etc)
+      // Sync Skiddle if any Skiddle playlists are enabled
+      const skiddlePlaylists = apiPlaylists.filter(p =>
+        p.handle.toLowerCase().includes('skiddle')
+      )
+
+      if (skiddlePlaylists.length > 0) {
+        const response = await fetch('/api/sync-skiddle')
+        const data = await response.json()
+
+        if (data.success) {
+          totalSynced += data.synced || 0
+          results.push(`Skiddle: ${data.synced}`)
+        } else {
+          results.push(`Skiddle: failed`)
+        }
+      }
 
       if (results.length > 0) {
         setSyncMessage(`✓ Synced ${totalSynced} events (${results.join(', ')})`)
