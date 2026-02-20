@@ -3,33 +3,33 @@ export default async function handler(req, res) {
   const AIRTABLE_BASE_ID = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID
   const SKIDDLE_KEY = process.env.NEXT_PUBLIC_SKIDDLE_KEY
 
-  // Fetch existing events for these playlists
-  async function getExistingEvents(playlistIds) {
-    const filter = `OR(${playlistIds.map(id => `FIND('${id}', ARRAYJOIN(Playlist))`).join(',')})`
-    const response = await fetch(
-      `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Events?filterByFormula=${encodeURIComponent(filter)}`,
-      { headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` } }
-    )
-    const data = await response.json()
-    return new Set(data.records.map(r => `${r.fields.Event}|${r.fields.When}`))
-  }
-
   try {
+    // Fetch existing events to avoid duplicates
+    async function getExistingEvents(playlistIds) {
+      const filter = `OR(${playlistIds.map(id => `FIND('${id}', ARRAYJOIN(Playlist))`).join(',')})`
+      const response = await fetch(
+        `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Events?filterByFormula=${encodeURIComponent(filter)}`,
+        { headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` } }
+      )
+      const data = await response.json()
+      return new Set(data.records.map(r => `${r.fields.Event}|${r.fields.When}`))
+    }
+
     // Get Brighton & Worthing playlists
     const playlistsRes = await fetch(
-      `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Playlists?filterByFormula=OR(Handle='@SkiddleBrighton', Handle='@SkiddleWorthing')`
-    , {
-      headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` }
-    })
+      `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Playlists?filterByFormula=OR(Handle='@SkiddleBrighton', Handle='@SkiddleWorthing')`,
+      { headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` } }
+    )
     const playlistsData = await playlistsRes.json()
     const brightonPlaylist = playlistsData.records.find(r => r.fields.Handle === '@SkiddleBrighton')
     const worthingPlaylist = playlistsData.records.find(r => r.fields.Handle === '@SkiddleWorthing')
 
-    console.log('Playlists found:', { brightonPlaylist, worthingPlaylist })
-
     if (!brightonPlaylist || !worthingPlaylist) {
       return res.status(400).json({ error: 'Playlists not found' })
     }
+
+    // Get existing events
+    const existingEvents = await getExistingEvents([brightonPlaylist.id, worthingPlaylist.id])
 
     // Fetch Brighton events
     const brightonRes = await fetch(
@@ -43,15 +43,19 @@ export default async function handler(req, res) {
     )
     const worthingData = await worthingRes.json()
 
-    console.log('Events fetched:', { brighton: brightonData.results?.length, worthing: worthingData.results?.length })
-
     const allEvents = [
-      ...brightonData.results.map(e => ({ ...e, playlist: brightonPlaylist.id })),
-      ...worthingData.results.map(e => ({ ...e, playlist: worthingPlaylist.id }))
+      ...(brightonData.results || []).map(e => ({ ...e, playlist: brightonPlaylist.id })),
+      ...(worthingData.results || []).map(e => ({ ...e, playlist: worthingPlaylist.id }))
     ]
 
-    // Create records
-    const records = allEvents.map(event => ({
+    // Filter out duplicates
+    const newEvents = allEvents.filter(event => {
+      const key = `${event.eventname}|${event.date}`
+      return !existingEvents.has(key)
+    })
+
+    // Create records for new events only
+    const records = newEvents.map(event => ({
       fields: {
         'Event': event.eventname,
         'When': event.date,
@@ -75,7 +79,7 @@ export default async function handler(req, res) {
       synced += batch.length
     }
 
-    res.json({ success: true, synced })
+    res.json({ success: true, synced, total: allEvents.length, skipped: allEvents.length - synced })
 
   } catch (error) {
     res.status(500).json({ error: error.message })
