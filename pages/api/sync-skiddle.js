@@ -5,8 +5,8 @@ export default async function handler(req, res) {
 
   try {
     // Fetch existing events from STAGING to avoid duplicates
-    async function getExistingInStaging(sources) {
-      const filter = `OR(${sources.map(s => `Source='${s}'`).join(',')})`
+    async function getExistingInStaging(source) {
+      const filter = `Source='${source}'`
       const response = await fetch(
         `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Staging?filterByFormula=${encodeURIComponent(filter)}`,
         { headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` } }
@@ -15,8 +15,7 @@ export default async function handler(req, res) {
       return new Set(data.records.map(r => `${r.fields.Event}|${r.fields.When}`))
     }
 
-    const sources = ['Skiddle Brighton', 'Skiddle Worthing']
-    const existingEvents = await getExistingInStaging(sources)
+    const existingEvents = await getExistingInStaging('Skiddle')
 
     // Fetch Brighton events
     const brightonRes = await fetch(
@@ -31,16 +30,8 @@ export default async function handler(req, res) {
     const worthingData = await worthingRes.json()
 
     const allEvents = [
-      ...(brightonData.results || []).map(e => ({
-        ...e,
-        source: 'Skiddle Brighton',
-        playlist: '@SkiddleBrighton'
-      })),
-      ...(worthingData.results || []).map(e => ({
-        ...e,
-        source: 'Skiddle Worthing',
-        playlist: '@SkiddleWorthing'
-      }))
+      ...(brightonData.results || []),
+      ...(worthingData.results || [])
     ]
 
     // Filter out duplicates
@@ -49,14 +40,14 @@ export default async function handler(req, res) {
       return !existingEvents.has(key)
     })
 
-    // Create records for Staging
+    // Create records for Staging - all link to single @Skiddle playlist
     const records = newEvents.map(event => ({
       fields: {
         'Event': event.eventname,
         'When': event.date,
         'Link': event.link,
-        'Playlist': event.playlist,
-        'Source': event.source,
+        'Playlist': '@Skiddle',
+        'Source': 'Skiddle',
         'Status': 'Approved'
       }
     }))
