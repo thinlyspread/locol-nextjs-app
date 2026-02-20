@@ -284,33 +284,38 @@ export default function Home() {
                       <span>{formatDate(event.date)}</span>
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {event.playlist.slice(0, 3).map((handle, idx) => (
-                        <div key={idx} className="flex items-center gap-1">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              toggleFilter(handle)
-                            }}
-                            className="text-blue-600 hover:text-blue-800 font-medium"
-                          >
-                            {handle}
-                          </button>
-                          {event.link && (
-                            <a
-                              href={event.link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-gray-500 hover:text-blue-600"
+                        <>
+                          {idx > 0 && <span className="text-gray-400 mx-1">•</span>}
+                          <div key={idx} className="flex items-center gap-1.5">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                toggleFilter(handle)
+                              }}
+                              className="text-blue-600 hover:text-blue-800 font-medium"
                             >
-                              ↗
-                            </a>
-                          )}
-                        </div>
+                              {handle}
+                            </button>
+                            {event.link && (
+                              <a
+                                href={event.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-gray-400 hover:text-blue-600 p-0.5"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                              </a>
+                            )}
+                          </div>
+                        </>
                       ))}
                       {event.playlist.length > 3 && (
-                        <span className="text-gray-500 text-sm">
+                        <span className="text-gray-500 text-sm ml-1">
                           +{event.playlist.length - 3} more
                         </span>
                       )}

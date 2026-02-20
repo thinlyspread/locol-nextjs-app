@@ -46,6 +46,7 @@ export default async function handler(req, res) {
         'Event': event.eventname,
         'When': event.date,
         'Link': event.link,
+        'Links': JSON.stringify([{ playlist: '@Skiddle', url: event.link }]),
         'Playlist': '@Skiddle',
         'Source': 'Skiddle',
         'Status': 'Approved'
