@@ -39,10 +39,9 @@ export default function Home() {
         return allRecords
       }
 
-      const [eventsRecords, playlistsRecords, usersRecords] = await Promise.all([
+      const [eventsRecords, playlistsRecords] = await Promise.all([
         fetchAllRecords('Events'),
-        fetchAllRecords('Playlists'),
-        fetchAllRecords('Users')
+        fetchAllRecords('Playlists')
       ])
 
       const playlistIdToHandle = {}
@@ -50,39 +49,29 @@ export default function Home() {
         playlistIdToHandle[p.id] = p.fields.Handle
       })
 
-      const userIdToName = {}
-      usersRecords.forEach(u => {
-        userIdToName[u.id] = u.fields['User Name']
-      })
+      const transformedEvents = eventsRecords.map(record => {
+        const playlistIds = Array.isArray(record.fields.Playlist)
+          ? record.fields.Playlist
+          : (record.fields.Playlist ? [record.fields.Playlist] : [])
 
-      const transformedEvents = eventsRecords.map(record => ({
-        id: record.id,
-        title: record.fields.Event,
-        date: record.fields.When,
-        link: record.fields.Link,
-        playlist: record.fields.Playlist?.map(id => playlistIdToHandle[id]) || [],
-        verificationStatus: record.fields.Playlist_Verification_Status
-      }))
+        return {
+          id: record.id,
+          title: record.fields.Event,
+          date: record.fields.When,
+          link: record.fields.Link,
+          links: record.fields.Links ? JSON.parse(record.fields.Links) : [],
+          playlist: playlistIds.map(id => playlistIdToHandle[id]).filter(Boolean)
+        }
+      })
 
       const transformedPlaylists = playlistsRecords.map(record => ({
         id: record.id,
         handle: record.fields.Handle,
-        name: record.fields['Playlist Name'],
-        verificationStatus: record.fields.Playlist_Verification_Status
+        name: record.fields['Playlist Name']
       }))
 
-      const verifiedEvents = transformedEvents.filter(e => {
-        const status = Array.isArray(e.verificationStatus) ? e.verificationStatus[0] : e.verificationStatus
-        return status === 'Verified'
-      })
-
-      const verifiedPlaylists = transformedPlaylists.filter(p => {
-        const status = Array.isArray(p.verificationStatus) ? p.verificationStatus[0] : p.verificationStatus
-        return status === 'Verified'
-      })
-
-      setEvents(verifiedEvents)
-      setPlaylists(verifiedPlaylists)
+      setEvents(transformedEvents)
+      setPlaylists(transformedPlaylists)
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
@@ -174,7 +163,10 @@ export default function Home() {
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="text-2xl font-bold text-gray-900">LOCOL</div>
+            <div>
+              <div className="text-2xl font-bold text-gray-900">LOCOL</div>
+              <p className="text-xs text-gray-500">find, create & remix local events</p>
+            </div>
             <div className="flex gap-8 items-center">
               <a href="/" className="text-gray-700 hover:text-gray-900 font-medium">What's on?</a>
               <a href="/dashboard" className="text-gray-700 hover:text-gray-900 font-medium">Dashboard</a>
@@ -183,12 +175,6 @@ export default function Home() {
         </div>
       </nav>
 
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">What's on?</h1>
-          <p className="text-lg text-gray-600">find & remix juicy events</p>
-        </div>
-      </div>
 
       <div className="bg-gray-50 border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
