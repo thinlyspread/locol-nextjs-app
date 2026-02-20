@@ -8,7 +8,7 @@ export default function Dashboard() {
   const [userEvents, setUserEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const [editingEvent, setEditingEvent] = useState(null)
-  const [playlistFilter, setPlaylistFilter] = useState('all')
+  const [playlistFilters, setPlaylistFilters] = useState(new Set(['all']))
   const [displayCount, setDisplayCount] = useState(50)
   
   const AIRTABLE_API_KEY = process.env.NEXT_PUBLIC_AIRTABLE_API_KEY
@@ -211,15 +211,35 @@ export default function Dashboard() {
   function cancelEdit() {
     setEditingEvent(null)
   }
+  
+  function togglePlaylistFilters(filter) {
+      const newFilters = new Set(playlistFilters)
+    
+      if (filter === 'all') {
+        setPlaylistFilters(new Set(['all']))
+      } else {
+        newFilters.delete('all')
+        if (newFilters.has(filter)) {
+          newFilters.delete(filter)
+        } else {
+          newFilters.add(filter)
+        }
+        if (newFilters.size === 0) {
+          setPlaylistFilters(new Set(['all']))
+        } else {
+          setPlaylistFilters(newFilters)
+        }
+      }
+    }
 
   function formatDate(dateString) {
     const date = new Date(dateString)
     return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
   }
 
-  const filteredEvents = playlistFilter === 'all' 
-    ? userEvents 
-    : userEvents.filter(e => e.playlist.includes(playlistFilter))
+const filteredEvents = playlistFilters.has('all')
+    ? userEvents
+    : userEvents.filter(e => e.playlist.some(p => playlistFilters.has(p)))
 
   const apiPlaylists = userPlaylists.filter(p => 
     p.handle.toLowerCase().includes('ticketmaster') || 
@@ -269,67 +289,83 @@ export default function Dashboard() {
           <section className="mb-12">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">My Playlists</h2>
             
-            {manualPlaylists.length > 0 && (
-              <>
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Manual Curation</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  {manualPlaylists.map(playlist => {
-                    const status = Array.isArray(playlist.verificationStatus) 
-                      ? playlist.verificationStatus[0] 
-                      : playlist.verificationStatus
-                    const eventCount = userEvents.filter(e => e.playlist.includes(playlist.handle)).length
+	  {manualPlaylists.length > 0 && (
+	                <>
+	                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Manual Curation</h3>
+	                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
+	                    {manualPlaylists.map(playlist => {
+	                      const status = Array.isArray(playlist.verificationStatus) 
+	                        ? playlist.verificationStatus[0] 
+	                        : playlist.verificationStatus
+	                      const eventCount = userEvents.filter(e => e.playlist.includes(playlist.handle)).length
                     
-                    return (
-                      <div key={playlist.id} className="bg-white border border-gray-200 rounded-lg p-6">
-                        <div className="text-lg font-bold text-blue-600 mb-1">{playlist.handle}</div>
-                        <div className="text-sm text-gray-600 mb-4">{playlist.name}</div>
-                        <div className="flex justify-between items-center">
-                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                            status === 'Verified' 
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                          }`}>
-                            {status}
-                          </span>
-                          <span className="text-sm text-gray-600">{eventCount} events</span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </>
-            )}
+	                      return (
+	                        <button
+	                          key={playlist.id}
+	                          onClick={() => togglePlaylistFilters(playlist.handle)}
+							  className={`rounded-lg p-4 hover:shadow-md transition text-left ${
+							                            playlistFilters.has(playlist.handle)
+							                              ? 'bg-blue-50 border-2 border-blue-500'
+							                              : 'bg-white border border-gray-200 hover:border-blue-300'
+							                          }`}
+	                        >
+	                          <div className="text-base font-bold text-blue-600 mb-1">{playlist.handle}</div>
+	                          <div className="text-xs text-gray-600 mb-3">{playlist.name}</div>
+	                          <div className="flex justify-between items-center">
+	                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+	                              status === 'Verified' 
+	                                ? 'bg-green-100 text-green-800'
+	                                : 'bg-yellow-100 text-yellow-800'
+	                            }`}>
+	                              {status}
+	                            </span>
+	                            <span className="text-xs text-gray-600">{eventCount}</span>
+	                          </div>
+	                        </button>
+	                      )
+	                    })}
+	                  </div>
+	                </>
+	              )}
 
-            {apiPlaylists.length > 0 && (
-              <>
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">API Synced</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {apiPlaylists.map(playlist => {
-                    const status = Array.isArray(playlist.verificationStatus) 
-                      ? playlist.verificationStatus[0] 
-                      : playlist.verificationStatus
-                    const eventCount = userEvents.filter(e => e.playlist.includes(playlist.handle)).length
+	              {apiPlaylists.length > 0 && (
+	                <>
+	                  <h3 className="text-sm font-semibold text-gray-700 mb-3">API Synced</h3>
+	                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+	                    {apiPlaylists.map(playlist => {
+	                      const status = Array.isArray(playlist.verificationStatus) 
+	                        ? playlist.verificationStatus[0] 
+	                        : playlist.verificationStatus
+	                      const eventCount = userEvents.filter(e => e.playlist.includes(playlist.handle)).length
                     
-                    return (
-                      <div key={playlist.id} className="bg-white border border-gray-200 rounded-lg p-6">
-                        <div className="text-lg font-bold text-purple-600 mb-1">{playlist.handle}</div>
-                        <div className="text-sm text-gray-600 mb-4">{playlist.name}</div>
-                        <div className="flex justify-between items-center">
-                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                            status === 'Verified' 
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                          }`}>
-                            {status}
-                          </span>
-                          <span className="text-sm text-gray-600">{eventCount} events</span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </>
-            )}
+	                      return (
+	                        <button
+	                          key={playlist.id}
+	                          onClick={() => togglePlaylistFilters(playlist.handle)}
+							  className={`rounded-lg p-4 hover:shadow-md transition text-left ${
+							                            playlistFilters.has(playlist.handle)
+							                              ? 'bg-purple-50 border-2 border-purple-500'
+							                              : 'bg-white border border-gray-200 hover:border-purple-300'
+							                          }`}
+	                        >
+	                          <div className="text-base font-bold text-purple-600 mb-1">{playlist.handle}</div>
+	                          <div className="text-xs text-gray-600 mb-3">{playlist.name}</div>
+	                          <div className="flex justify-between items-center">
+	                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+	                              status === 'Verified' 
+	                                ? 'bg-green-100 text-green-800'
+	                                : 'bg-yellow-100 text-yellow-800'
+	                            }`}>
+	                              {status}
+	                            </span>
+	                            <span className="text-xs text-gray-600">{eventCount}</span>
+	                          </div>
+	                        </button>
+	                      )
+	                    })}
+	                  </div>
+	                </>
+	              )}
           </section>
 
           <section className="mb-12">
@@ -344,22 +380,6 @@ export default function Dashboard() {
               >
                 + Add Event
               </button>
-            </div>
-
-            <div className="mb-6">
-              <label className="text-sm font-medium text-gray-700 block mb-2">Filter by playlist:</label>
-              <select
-                value={playlistFilter}
-                onChange={(e) => setPlaylistFilter(e.target.value)}
-                className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All playlists ({userEvents.length} events)</option>
-                {userPlaylists.map(p => (
-                  <option key={p.id} value={p.handle}>
-                    {p.handle} ({userEvents.filter(e => e.playlist.includes(p.handle)).length} events)
-                  </option>
-                ))}
-              </select>
             </div>
             
             <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
