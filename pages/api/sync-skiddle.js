@@ -3,6 +3,17 @@ export default async function handler(req, res) {
   const AIRTABLE_BASE_ID = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID
   const SKIDDLE_KEY = process.env.NEXT_PUBLIC_SKIDDLE_KEY
 
+  // Fetch existing events for these playlists
+  async function getExistingEvents(playlistIds) {
+    const filter = `OR(${playlistIds.map(id => `FIND('${id}', ARRAYJOIN(Playlist))`).join(',')})`
+    const response = await fetch(
+      `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Events?filterByFormula=${encodeURIComponent(filter)}`,
+      { headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` } }
+    )
+    const data = await response.json()
+    return new Set(data.records.map(r => `${r.fields.Event}|${r.fields.When}`))
+  }
+
   try {
     // Get Brighton & Worthing playlists
     const playlistsRes = await fetch(
@@ -14,21 +25,25 @@ export default async function handler(req, res) {
     const brightonPlaylist = playlistsData.records.find(r => r.fields.Handle === '@SkiddleBrighton')
     const worthingPlaylist = playlistsData.records.find(r => r.fields.Handle === '@SkiddleWorthing')
 
+    console.log('Playlists found:', { brightonPlaylist, worthingPlaylist })
+
     if (!brightonPlaylist || !worthingPlaylist) {
       return res.status(400).json({ error: 'Playlists not found' })
     }
 
     // Fetch Brighton events
     const brightonRes = await fetch(
-      `https://www.skiddle.com/api/v1/events/search/?api_key=${SKIDDLE_KEY}&keyword=Brighton&limit=50&minDate=${new Date().toISOString().split('T')[0]}&eventcode=all`
+      `https://www.skiddle.com/api/v1/events/search/?api_key=${SKIDDLE_KEY}&keyword=Brighton&limit=50`
     )
     const brightonData = await brightonRes.json()
 
     // Fetch Worthing events
     const worthingRes = await fetch(
-      `https://www.skiddle.com/api/v1/events/search/?api_key=${SKIDDLE_KEY}&keyword=Worthing&limit=50&minDate=${new Date().toISOString().split('T')[0]}&eventcode=all`
+      `https://www.skiddle.com/api/v1/events/search/?api_key=${SKIDDLE_KEY}&keyword=Worthing&limit=50`
     )
     const worthingData = await worthingRes.json()
+
+    console.log('Events fetched:', { brighton: brightonData.results?.length, worthing: worthingData.results?.length })
 
     const allEvents = [
       ...brightonData.results.map(e => ({ ...e, playlist: brightonPlaylist.id })),

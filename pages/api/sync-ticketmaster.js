@@ -3,6 +3,17 @@ export default async function handler(req, res) {
   const AIRTABLE_API_KEY = process.env.NEXT_PUBLIC_AIRTABLE_API_KEY
   const AIRTABLE_BASE_ID = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID
 
+  // Fetch existing events for these playlists
+  async function getExistingEvents(playlistIds) {
+    const filter = `OR(${playlistIds.map(id => `FIND('${id}', ARRAYJOIN(Playlist))`).join(',')})`
+    const response = await fetch(
+      `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Events?filterByFormula=${encodeURIComponent(filter)}`,
+      { headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` } }
+    )
+    const data = await response.json()
+    return new Set(data.records.map(r => `${r.fields.Event}|${r.fields.When}`))
+  }
+
   try {
     // 1. Fetch events from Ticketmaster (Brighton & Worthing)
     const [brightonRes, worthingRes] = await Promise.all([
