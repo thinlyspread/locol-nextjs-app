@@ -212,7 +212,7 @@ export default function Dashboard() {
     setEditingEvent(null)
   }
   
-  function togglePlaylistFilters(filter) {
+  function togglePlaylistFilter(filter) {
       const newFilters = new Set(playlistFilters)
     
       if (filter === 'all') {
@@ -302,7 +302,7 @@ const filteredEvents = playlistFilters.has('all')
 	                      return (
 	                        <button
 	                          key={playlist.id}
-	                          onClick={() => togglePlaylistFilters(playlist.handle)}
+	                          onClick={() => togglePlaylistFilter(playlist.handle)}
 							  className={`rounded-lg p-4 hover:shadow-md transition text-left ${
 							                            playlistFilters.has(playlist.handle)
 							                              ? 'bg-blue-50 border-2 border-blue-500'
@@ -341,7 +341,7 @@ const filteredEvents = playlistFilters.has('all')
 	                      return (
 	                        <button
 	                          key={playlist.id}
-	                          onClick={() => togglePlaylistFilters(playlist.handle)}
+	                          onClick={() => togglePlaylistFilter(playlist.handle)}
 							  className={`rounded-lg p-4 hover:shadow-md transition text-left ${
 							                            playlistFilters.has(playlist.handle)
 							                              ? 'bg-purple-50 border-2 border-purple-500'
