@@ -39,7 +39,6 @@ export default async function handler(req, res) {
     let deleted = 0
 
     for (const group of toMerge) {
-      // Keep first record, merge playlists from others
       const [keeper, ...duplicates] = group
 
       // Collect all playlist IDs
@@ -48,7 +47,17 @@ export default async function handler(req, res) {
         (dup.fields.Playlist || []).forEach(p => allPlaylists.add(p))
       })
 
-      // Update keeper with merged playlists
+      // Merge Links arrays
+      const allLinks = []
+      const keeperLinks = keeper.fields.Links ? JSON.parse(keeper.fields.Links) : []
+      allLinks.push(...keeperLinks)
+
+      duplicates.forEach(dup => {
+        const dupLinks = dup.fields.Links ? JSON.parse(dup.fields.Links) : []
+        allLinks.push(...dupLinks)
+      })
+
+      // Update keeper with merged playlists and links
       await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Events/${keeper.id}`, {
         method: 'PATCH',
         headers: {
@@ -56,7 +65,10 @@ export default async function handler(req, res) {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          fields: { 'Playlist': Array.from(allPlaylists) }
+          fields: {
+            'Playlist': Array.from(allPlaylists),
+            'Links': JSON.stringify(allLinks)
+          }
         })
       })
 

@@ -20,6 +20,9 @@ export default async function handler(req, res) {
       offset = data.offset
     } while (offset)
 
+    console.log('Found approved records:', allRecords.length)
+    console.log('Sample:', allRecords[0]?.fields)
+
     if (allRecords.length === 0) {
       return res.json({ success: true, published: 0, message: 'No new events to publish' })
     }
@@ -41,6 +44,7 @@ export default async function handler(req, res) {
         'Event': r.fields.Event,
         'When': r.fields.When,
         'Link': r.fields.Link,
+        'Links': r.fields.Links,
         'Playlist': [playlistMap[r.fields.Playlist]]  // Convert handle to ID array
       }
     }))
