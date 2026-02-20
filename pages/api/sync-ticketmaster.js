@@ -4,34 +4,19 @@ export default async function handler(req, res) {
   const TICKETMASTER_KEY = process.env.NEXT_PUBLIC_TICKETMASTER_KEY
 
   try {
-    // Fetch existing events to avoid duplicates
-    async function getExistingEvents(playlistHandles) {
-      const filter = `OR(${playlistHandles.map(h => `FIND('${h}', ARRAYJOIN(Playlist))`).join(',')})`
+    // Fetch existing events from STAGING to avoid duplicates
+    async function getExistingInStaging(sources) {
+      const filter = `OR(${sources.map(s => `Source='${s}'`).join(',')})`
       const response = await fetch(
-        `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Events?filterByFormula=${encodeURIComponent(filter)}`,
+        `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Staging?filterByFormula=${encodeURIComponent(filter)}`,
         { headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` } }
       )
       const data = await response.json()
       return new Set(data.records.map(r => `${r.fields.Event}|${r.fields.When}`))
     }
 
-    // Get Brighton & Worthing playlists
-    const playlistsRes = await fetch(
-      `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Playlists?filterByFormula=OR(Handle='@TicketmasterBrighton', Handle='@TicketmasterWorthing')`,
-      { headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` } }
-    )
-    const playlistsData = await playlistsRes.json()
-    const brightonPlaylist = playlistsData.records.find(r => r.fields.Handle === '@TicketmasterBrighton')
-    const worthingPlaylist = playlistsData.records.find(r => r.fields.Handle === '@TicketmasterWorthing')
-
-    if (!brightonPlaylist || !worthingPlaylist) {
-      return res.status(400).json({ error: 'Playlists not found' })
-    }
-
-    // Get existing events
-    const existingEvents = await getExistingEvents(['@TicketmasterBrighton', '@TicketmasterWorthing'])
-    console.log('DEBUG - Existing events count:', existingEvents.size)
-    console.log('DEBUG - Sample keys:', Array.from(existingEvents).slice(0, 5))
+    const sources = ['Ticketmaster Brighton', 'Ticketmaster Worthing']
+    const existingEvents = await getExistingInStaging(sources)
 
     // Fetch Brighton events
     const brightonRes = await fetch(
@@ -45,9 +30,26 @@ export default async function handler(req, res) {
     )
     const worthingData = await worthingRes.json()
 
+    // Get playlists for linking
+    const playlistsRes = await fetch(
+      `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Playlists?filterByFormula=OR(Handle='@TicketmasterBrighton', Handle='@TicketmasterWorthing')`,
+      { headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` } }
+    )
+    const playlistsData = await playlistsRes.json()
+    const brightonPlaylist = playlistsData.records.find(r => r.fields.Handle === '@TicketmasterBrighton')
+    const worthingPlaylist = playlistsData.records.find(r => r.fields.Handle === '@TicketmasterWorthing')
+
     const allEvents = [
-      ...(brightonData._embedded?.events || []).map(e => ({ ...e, playlist: brightonPlaylist.id })),
-      ...(worthingData._embedded?.events || []).map(e => ({ ...e, playlist: worthingPlaylist.id }))
+      ...(brightonData._embedded?.events || []).map(e => ({
+        ...e,
+        source: 'Ticketmaster Brighton',
+        playlist: brightonPlaylist?.fields.Handle
+      })),
+      ...(worthingData._embedded?.events || []).map(e => ({
+        ...e,
+        source: 'Ticketmaster Worthing',
+        playlist: worthingPlaylist?.fields.Handle
+      }))
     ]
 
     // Filter out duplicates
@@ -56,21 +58,26 @@ export default async function handler(req, res) {
       return !existingEvents.has(key)
     })
 
-    // Create records for new events only
+    // Create records for Staging
     const records = newEvents.map(event => ({
       fields: {
         'Event': event.name,
         'When': event.dates.start.localDate,
         'Link': event.url,
-        'Playlist': [event.playlist]
+        'Playlist': event.playlist,
+        'Source': event.source,
+        'Status': 'Approved'
       }
     }))
 
-    // Batch upload (max 10 at a time)
+    // Debug: show first record being sent
+    console.log('Sample record to upload:', JSON.stringify(records[0], null, 2))
+
+    // Batch upload to STAGING
     let synced = 0
     for (let i = 0; i < records.length; i += 10) {
       const batch = records.slice(i, i + 10)
-      await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Events`, {
+      const response = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Staging`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
@@ -78,6 +85,10 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify({ records: batch })
       })
+
+      const result = await response.json()
+      console.log('Batch upload response:', response.status, result.error || 'success')
+
       synced += batch.length
     }
 

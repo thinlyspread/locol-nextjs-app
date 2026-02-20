@@ -238,6 +238,24 @@ export default function Dashboard() {
       }
     }
 
+  async function publishStaging() {
+    setIsSyncing(true)
+    setSyncMessage('Publishing...')
+
+    try {
+      const response = await fetch('/api/publish-staging')
+      const data = await response.json()
+
+      setSyncMessage(`✓ Published ${data.published} events to live feed`)
+      fetchUserData()
+    } catch (error) {
+      setSyncMessage(`✗ Publish failed: ${error.message}`)
+    } finally {
+      setIsSyncing(false)
+      setTimeout(() => setSyncMessage(''), 5000)
+    }
+  }
+
   async function syncAllAPIs() {
     setIsSyncing(true)
     setSyncMessage('')
@@ -398,17 +416,30 @@ const filteredEvents = (playlistFilters.has('all')
 	                <>
 	                <div className="flex justify-between items-center mb-3">
                   <h3 className="text-sm font-semibold text-gray-700">API Synced</h3>
-                  <button
-                    onClick={syncAllAPIs}
-                    disabled={isSyncing}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                      isSyncing
-                        ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                        : 'bg-purple-600 text-white hover:bg-purple-700'
-                    }`}
-                  >
-                    <span>{isSyncing ? '⟳ Syncing...' : '⟳ Sync All APIs'}</span>
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={syncAllAPIs}
+                      disabled={isSyncing}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                        isSyncing
+                          ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                          : 'bg-purple-600 text-white hover:bg-purple-700'
+                      }`}
+                    >
+                      <span>{isSyncing ? '⟳ Syncing...' : '⟳ Sync APIs'}</span>
+                    </button>
+                    <button
+                      onClick={publishStaging}
+                      disabled={isSyncing}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                        isSyncing
+                          ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                          : 'bg-green-600 text-white hover:bg-green-700'
+                      }`}
+                    >
+                      <span>📤 Publish</span>
+                    </button>
+                  </div>
                 </div>
                 {syncMessage && (
                   <div className={`text-sm mb-3 px-3 py-2 rounded ${
