@@ -5,8 +5,8 @@ export default async function handler(req, res) {
 
   try {
     // Fetch existing events to avoid duplicates
-    async function getExistingEvents(playlistIds) {
-      const filter = `OR(${playlistIds.map(id => `FIND('${id}', ARRAYJOIN(Playlist))`).join(',')})`
+    async function getExistingEvents(playlistHandles) {
+      const filter = `OR(${playlistHandles.map(h => `FIND('${h}', ARRAYJOIN(Playlist))`).join(',')})`
       const response = await fetch(
         `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Events?filterByFormula=${encodeURIComponent(filter)}`,
         { headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` } }
@@ -29,7 +29,9 @@ export default async function handler(req, res) {
     }
 
     // Get existing events
-    const existingEvents = await getExistingEvents([brightonPlaylist.id, worthingPlaylist.id])
+    const existingEvents = await getExistingEvents(['@TicketmasterBrighton', '@TicketmasterWorthing'])
+    console.log('DEBUG - Existing events count:', existingEvents.size)
+    console.log('DEBUG - Sample keys:', Array.from(existingEvents).slice(0, 5))
 
     // Fetch Brighton events
     const brightonRes = await fetch(
