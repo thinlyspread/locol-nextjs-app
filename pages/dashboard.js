@@ -398,6 +398,92 @@ const filteredEvents = playlistFilters.has('all')
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
+                    {/* Inline Add Row */}
+                    {isAddingInline && (
+                      <tr className="bg-blue-50 border-2 border-blue-300">
+                        <td className="px-6 py-4">
+                          <input
+                            type="text"
+                            placeholder="Event name..."
+                            value={newEvent.event}
+                            onChange={(e) => setNewEvent({...newEvent, event: e.target.value})}
+                            className="w-full px-3 py-2 text-sm text-gray-900 bg-white border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </td>
+                        <td className="px-6 py-4">
+                          <input
+                            type="date"
+                            value={newEvent.when}
+                            onChange={(e) => setNewEvent({...newEvent, when: e.target.value})}
+                            className="w-full px-3 py-2 text-sm text-gray-900 bg-white border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </td>
+                        <td className="px-6 py-4">
+                          <select
+                            value={newEvent.playlist}
+                            onChange={(e) => setNewEvent({...newEvent, playlist: e.target.value})}
+                            className="w-full px-3 py-2 text-sm text-gray-900 bg-white border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">Choose playlist...</option>
+                            {userPlaylists.map(p => (
+                              <option key={p.id} value={p.handle}>{p.handle}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-6 py-4">
+                          {/* Empty - no status needed for new row */}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex gap-3">
+                            <button
+                              onClick={async () => {
+                                if (!newEvent.event || !newEvent.when || !newEvent.playlist) {
+                                  alert('Please fill all required fields')
+                                  return
+                                }
+                                const playlist = userPlaylists.find(p => p.handle === newEvent.playlist)
+                                try {
+                                  await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Events`, {
+                                    method: 'POST',
+                                    headers: {
+                                      'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
+                                      'Content-Type': 'application/json'
+                                    },
+                                    body: JSON.stringify({
+                                      records: [{
+                                        fields: {
+                                          'Event': newEvent.event,
+                                          'When': newEvent.when,
+                                          'Link': newEvent.link || '',
+                                          'Playlist': [playlist.id]
+                                        }
+                                      }]
+                                    })
+                                  })
+                                  setIsAddingInline(false)
+                                  setNewEvent({ event: '', when: '', link: '', playlist: '' })
+                                  fetchUserData()
+                                } catch (error) {
+                                  alert('Error: ' + error.message)
+                                }
+                              }}
+                              className="text-green-600 hover:text-green-800 text-sm font-medium"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => {
+                                setIsAddingInline(false)
+                                setNewEvent({ event: '', when: '', link: '', playlist: '' })
+                              }}
+                              className="text-red-600 hover:text-red-800 text-sm font-medium"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                     {filteredEvents.slice(0, displayCount).length === 0 ? (
                       <tr>
                         <td colSpan="5" className="px-6 py-12 text-center text-gray-500">No events yet</td>
