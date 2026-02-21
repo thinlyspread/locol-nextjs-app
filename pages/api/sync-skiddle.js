@@ -1,3 +1,17 @@
+/**
+ * SKIDDLE API FIELD MAPPING
+ *
+ * Available fields:
+ * - eventname: Event name
+ * - EventCode: Type (CLUB, LIVE, FEST)
+ * - venue.name: Venue name
+ * - venue.town: Town
+ * - date: Date (YYYY-MM-DD)
+ * - link: Ticket link
+ *
+ * Current title format: {eventname} ({EventCode}) @ {venue}
+ * Example: "Spirit with Inner City (CLUB) @ The British Engineerium"
+ */
 export default async function handler(req, res) {
   const AIRTABLE_API_KEY = process.env.NEXT_PUBLIC_AIRTABLE_API_KEY
   const AIRTABLE_BASE_ID = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID
@@ -33,6 +47,10 @@ export default async function handler(req, res) {
       ...(brightonData.results || []),
       ...(worthingData.results || [])
     ]
+
+    console.log('=== SKIDDLE SAMPLE EVENTS ===')
+    console.log('Event 1:', JSON.stringify(allEvents[0], null, 2))
+    console.log('Event 2:', JSON.stringify(allEvents[1], null, 2))
 
     // Filter out duplicates
     const newEvents = allEvents.filter(event => {

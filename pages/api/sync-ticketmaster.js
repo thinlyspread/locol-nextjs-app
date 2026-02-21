@@ -1,3 +1,18 @@
+/**
+ * TICKETMASTER API FIELD MAPPING
+ *
+ * Available fields:
+ * - name: Event name (e.g., "Suede")
+ * - classifications[0].genre.name: Genre (e.g., "Rock", "Pop", "Comedy")
+ * - classifications[0].subGenre.name: SubGenre (e.g., "Alternative Rock")
+ * - _embedded.venues[0].name: Venue name
+ * - _embedded.venues[0].city.name: City
+ * - dates.start.localDate: Date (YYYY-MM-DD)
+ * - url: Ticket link
+ *
+ * Current title format: {name} ({genre}) @ {venue}
+ * Example: "Suede (Rock) @ The Brighton Centre"
+ */
 export default async function handler(req, res) {
   const AIRTABLE_API_KEY = process.env.NEXT_PUBLIC_AIRTABLE_API_KEY
   const AIRTABLE_BASE_ID = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID
@@ -33,6 +48,10 @@ export default async function handler(req, res) {
       ...(brightonData._embedded?.events || []),
       ...(worthingData._embedded?.events || [])
     ]
+
+    console.log('=== TICKETMASTER SAMPLE EVENTS ===')
+    console.log('Event 1:', JSON.stringify(allEvents[0], null, 2))
+    console.log('Event 2:', JSON.stringify(allEvents[1], null, 2))
 
     // Filter out duplicates
     const newEvents = allEvents.filter(event => {
