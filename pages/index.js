@@ -300,7 +300,7 @@ export default function Home() {
                 {filteredEvents.slice(0, displayCount).map((event) => (
                   <div
                     key={event.id}
-                    className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition cursor-pointer"
+                    className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition"
                   >
                     <h3 className="text-lg font-bold text-gray-900 mb-2">{event.title}</h3>
 
