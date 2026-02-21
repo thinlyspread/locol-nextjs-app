@@ -7,14 +7,14 @@ export default async function handler(req, res) {
 
     console.log('RAW webhook:', JSON.stringify(req.body, null, 2))
 
-    // Extract captured list data
+    // Extract captured list data (Browse AI structure)
     const capturedLists = task?.capturedLists || {}
     const listName = Object.keys(capturedLists)[0] // Get first list
-    const listData = capturedLists[listName]?.[0] || {} // Get first item
+    const data = capturedLists[listName]?.[0] || req.body.data || {} // Fallback to old format
 
-    console.log('Extracted data:', JSON.stringify(listData, null, 2))
+    console.log('Extracted data:', JSON.stringify(data, null, 2))
 
-    const standardized = transformScrapedData(listData)
+    const standardized = transformScrapedData(data)
 
     console.log('Transformed to:', JSON.stringify(standardized, null, 2))
 
