@@ -44,6 +44,8 @@ export default function Home() {
         fetchAllRecords('Playlists')
       ])
 
+      console.log('Playlists fetched:', playlistsRecords.length, playlistsRecords)
+
       const playlistIdToHandle = {}
       playlistsRecords.forEach(p => {
         playlistIdToHandle[p.id] = p.fields.Handle
@@ -150,9 +152,39 @@ export default function Home() {
     .sort((a, b) => new Date(a.date) - new Date(b.date))
 
   function formatDate(dateString) {
-      const date = new Date(dateString)
-      return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }).toUpperCase()
+    const date = new Date(dateString)
+    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }).toUpperCase()
+  }
+
+  function getDomainFromUrl(url) {
+    if (!url) return null
+    try {
+      const domain = new URL(url).hostname.replace('www.', '')
+      return domain
+    } catch {
+      return null
     }
+  }
+
+  function getDomainPlaylist(url, allPlaylists) {
+    const domain = getDomainFromUrl(url)
+    if (!domain) return null
+
+    // Map common domains to playlist handles
+    const domainMap = {
+      'universe.com': '@Universe',
+      'ticketmaster.co.uk': '@Ticketmaster',
+      'skiddle.com': '@Skiddle',
+      'brightondome.org': '@BrightonDome',
+      'wtm.uk': '@WTM',
+      'brightonfestival.org': '@BrightonFestival'
+    }
+
+    const playlistHandle = domainMap[domain]
+
+    // Check if this playlist actually exists
+    return allPlaylists.find(p => p.handle === playlistHandle) ? playlistHandle : null
+  }
 
   return (
     <>
