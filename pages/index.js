@@ -317,12 +317,22 @@ export default function Home() {
                         ).filter(Boolean).map(domain => {
                           // Find the first link for this domain
                           const linkEntry = event.links.find(l => getDomainFromUrl(l.url) === domain)
-                          const playlistExists = playlists.find(p => p.handle === linkEntry.playlist)
+
+                          // Look up playlist by actual domain, not by source attribution
+                          const domainToHandle = {
+                            'universe.com': '@Universe',
+                            'ticketmaster.co.uk': '@Ticketmaster',
+                            'brightondome.org': '@BrightonDome',
+                            'skiddle.com': '@Skiddle',
+                            'wtm.uk': '@WTM',
+                            'brightonfestival.org': '@BrightonFestival'
+                          }
+                          const playlistExists = playlists.find(p => p.handle === domainToHandle[domain])
 
                           return {
                             domain,
                             url: linkEntry.url,
-                            playlist: linkEntry.playlist,
+                            playlist: domainToHandle[domain] || linkEntry.playlist,
                             playlistExists
                           }
                         })
