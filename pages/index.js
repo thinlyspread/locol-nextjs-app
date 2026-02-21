@@ -296,63 +296,84 @@ export default function Home() {
               <div className="text-center py-12 text-gray-600">Loading...</div>
             ) : (
               <>
-<div className="max-w-3xl mx-auto space-y-3">
+<div className="max-w-3xl mx-auto space-y-2">
                 {filteredEvents.slice(0, displayCount).map((event) => (
                   <div
                     key={event.id}
-                    className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition cursor-pointer"
+                    className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition cursor-pointer"
                   >
-                    <h3 className="text-xl font-bold text-gray-900 mb-3">{event.title}</h3>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">{event.title}</h3>
 
-                    <div className="flex items-center gap-3 text-sm text-gray-600 mb-3">
+                    <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
                       <span>{formatDate(event.date)}</span>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
                       {(() => {
-                        const domainPlaylist = getDomainPlaylist(event.link, playlists)
-                        const otherPlaylists = domainPlaylist
-                          ? event.playlist.filter(p => p !== domainPlaylist)
-                          : event.playlist
-                        const displayPlaylists = domainPlaylist
-                          ? [domainPlaylist, ...otherPlaylists]
-                          : event.playlist
-                        const getPlaylistUrl = (playlistHandle) => {
-                          const linkEntry = event.links.find(l => l.playlist === playlistHandle)
-                          return linkEntry?.url || event.link
-                        }
-                        return displayPlaylists.slice(0, 3).map((handle, idx) => (
-                          <div key={idx} className="flex items-center gap-2">
-                            {idx > 0 && <span className="text-gray-400">•</span>}
-                            {idx > 0 && domainPlaylist && <span className="text-gray-500 text-sm">via</span>}
-                            <div className="flex items-center gap-1.5">
+                        // Get unique domains from Links array
+                        const linkDomains = event.links.map(linkEntry => ({
+                          domain: getDomainFromUrl(linkEntry.url),
+                          url: linkEntry.url,
+                          playlist: linkEntry.playlist
+                        })).filter(item => item.domain)
+
+                        // Deduplicate by domain
+                        const uniqueDomains = Array.from(
+                          new Map(linkDomains.map(item => [item.domain, item])).values()
+                        )
+
+                        return uniqueDomains.slice(0, 3).map((item, idx) => {
+                          // Check if playlist exists for this domain
+                          const playlistExists = playlists.find(p => p.handle === item.playlist)
+
+                          return (
+                            <div key={idx} className="flex items-center gap-1.5">
+                              {idx > 0 && <span className="text-gray-400">•</span>}
+
+                              {/* Verification icon */}
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  toggleFilter(handle)
+                                  if (playlistExists) {
+                                    toggleFilter(item.playlist)
+                                  }
                                 }}
-                                className="text-blue-600 hover:text-blue-800 font-medium"
+                                className={`text-xs ${playlistExists ? 'text-green-600' : 'text-orange-500'}`}
+                                title={playlistExists ? 'Verified source' : 'Unverified source'}
                               >
-                                {handle}
+                                {playlistExists ? '✓' : '!'}
                               </button>
+
+                              {/* Domain link */}
                               <a
-                                href={getPlaylistUrl(handle)}
+                                href={item.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}
-                                className="text-gray-400 hover:text-blue-600 p-0.5"
+                                className="text-blue-600 hover:text-blue-800 font-medium"
                               >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                {item.domain}
+                              </a>
+
+                              {/* External link icon */}
+                              <a
+                                href={item.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-gray-400 hover:text-blue-600"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                                 </svg>
                               </a>
                             </div>
-                          </div>
-                        ))
+                          )
+                        })
                       })()}
-                      {event.playlist.length > 3 && (
-                        <span className="text-gray-500 text-sm ml-1">
-                          +{event.playlist.length - 3} more
+                      {event.links.length > 3 && (
+                        <span className="text-gray-500 text-xs ml-1">
+                          +{event.links.length - 3} more
                         </span>
                       )}
                     </div>
