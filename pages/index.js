@@ -69,7 +69,8 @@ export default function Home() {
       const transformedPlaylists = playlistsRecords.map(record => ({
         id: record.id,
         handle: record.fields.Handle,
-        name: record.fields['Playlist Name']
+        name: record.fields['Playlist Name'],
+        verified: record.fields.Playlist_Verification_Status === 'Verified'
       }))
 
       setEvents(transformedEvents)
@@ -362,10 +363,10 @@ export default function Home() {
                                   toggleFilter(item.playlist)
                                 }
                               }}
-                              className={`text-xs ${item.playlistExists ? 'text-green-600' : 'text-orange-500'}`}
-                              title={item.playlistExists ? 'Verified source' : 'Unverified source'}
+                              className={`text-xs ${item.playlistExists?.verified ? 'text-green-600' : 'text-orange-500'}`}
+                              title={item.playlistExists?.verified ? 'Verified source' : 'Unverified source'}
                             >
-                              {item.playlistExists ? '✓' : '!'}
+                              {item.playlistExists?.verified ? '✓' : '!'}
                             </button>
 
                             {/* Event link domain */}
