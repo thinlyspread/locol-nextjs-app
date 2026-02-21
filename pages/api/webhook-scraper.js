@@ -1,72 +1,208 @@
-const SOURCE_TRANSFORMS = {
-  'brighton-dome': (raw) => ({
-    Event: `${raw.Title} - ${raw.Subtitle}`,
-    When: raw.Date,
-    Link: raw.URL,
-    Source: 'Brighton Dome',
-    Playlist: '@BrightonDome'  // Add playlist
-  })
-}
-
 export default async function handler(req, res) {
   const AIRTABLE_API_KEY = process.env.NEXT_PUBLIC_AIRTABLE_API_KEY
   const AIRTABLE_BASE_ID = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID
 
-  const { source, data } = req.body
+  try {
+    const { data } = req.body
 
-  console.log('Webhook received from:', source)
+    console.log('Webhook received:', JSON.stringify(data, null, 2))
 
-  const transform = SOURCE_TRANSFORMS[source]
-  if (!transform) {
-    return res.status(400).json({ error: 'Unknown source' })
-  }
+    // Universal transform
+    const standardized = transformScrapedData(data)
 
-  const standardized = transform(data)
-  console.log('Transformed to:', standardized)
+    console.log('Transformed to:', JSON.stringify(standardized, null, 2))
 
-  // Check for duplicates in Staging
-  const filter = `Source='${standardized.Source}'`
-  const stagingRes = await fetch(
-    `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Staging?filterByFormula=${encodeURIComponent(filter)}`,
-    { headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` } }
-  )
-  const stagingData = await stagingRes.json()
-  const existingEvents = new Set(stagingData.records.map(r => `${r.fields.Event}|${r.fields.When}`))
+    // Check duplicates in Staging
+    const filter = `Source='${standardized.Source}'`
+    const stagingRes = await fetch(
+      `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Staging?filterByFormula=${encodeURIComponent(filter)}`,
+      { headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` } }
+    )
+    const stagingData = await stagingRes.json()
+    const existingEvents = new Set(stagingData.records.map(r => `${r.fields.Event}|${r.fields.When}`))
 
-  const key = `${standardized.Event}|${standardized.When}`
-  const isDuplicate = existingEvents.has(key)
+    const key = `${standardized.Event}|${standardized.When}`
 
-  console.log('Duplicate check:', isDuplicate ? 'DUPLICATE FOUND' : 'New event')
+    if (existingEvents.has(key)) {
+      console.log('Duplicate found, skipping:', key)
+      return res.json({ success: true, skipped: true, reason: 'duplicate' })
+    }
 
-  if (isDuplicate) {
-    console.log('Skipping duplicate')
-    return res.json({ success: true, skipped: true, reason: 'duplicate' })
-  }
-
-  // Insert to Staging
-  const insertRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Staging`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      records: [{
-        fields: {
-          Event: standardized.Event,
-          When: standardized.When,
-          Link: standardized.Link,
-          Source: standardized.Source,
-          Playlist: standardized.Playlist,
-          Status: 'Approved'
-        }
-      }]
+    // Insert to Staging
+    const insertRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Staging`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        records: [{
+          fields: {
+            Event: standardized.Event,
+            When: standardized.When,
+            Link: standardized.Link,
+            Links: JSON.stringify(standardized.Links),
+            Playlist: standardized.Playlist,
+            Source: standardized.Source,
+            Status: 'Approved'
+          }
+        }]
+      })
     })
-  })
 
-  const insertData = await insertRes.json()
-  console.log('Airtable response:', insertRes.status, insertData)
-  console.log('Inserted to Staging:', insertData.records?.[0]?.id || 'FAILED')
+    const insertData = await insertRes.json()
+    console.log('Insert response:', insertRes.status, insertData.error || 'success')
+    console.log('Inserted ID:', insertData.records?.[0]?.id || 'FAILED')
 
-  res.json({ success: true, inserted: true, recordId: insertData.records?.[0]?.id })
+    res.json({ success: true, inserted: true, recordId: insertData.records?.[0]?.id })
+
+  } catch (error) {
+    console.error('Webhook error:', error)
+    res.status(500).json({ error: error.message })
+  }
+}
+
+// Universal transform function
+function transformScrapedData(raw) {
+  // Build event name from available fields
+  let eventParts = []
+  if (raw.Title) eventParts.push(raw.Title)
+  if (raw.Subtitle && raw.Subtitle !== raw.Title) eventParts.push(raw.Subtitle)
+  if (raw.Category) eventParts.push(`(${raw.Category})`)
+  if (raw.Venue) eventParts.push(`@ ${raw.Venue}`)
+
+  const eventName = eventParts.join(' - ') || 'Untitled Event'
+
+  // Parse date (returns first date if range)
+  const dates = parseDates(raw.Date || '')
+  const parsedDate = dates[0] || new Date().toISOString().substring(0, 10)
+
+  // Determine source and playlist from link domain
+  const domain = getDomainFromUrl(raw.Link)
+  const source = inferSource(domain)
+  const playlist = inferPlaylist(domain)
+
+  return {
+    Event: eventName,
+    When: parsedDate,
+    Link: raw.Link,
+    Links: [{ playlist, url: raw.Link }],
+    Playlist: playlist,
+    Source: source
+  }
+}
+
+function getDomainFromUrl(url) {
+  if (!url) return null
+  try {
+    return new URL(url).hostname.replace('www.', '')
+  } catch {
+    return null
+  }
+}
+
+function inferSource(domain) {
+  const domainMap = {
+    'brightondome.org': 'Brighton Dome',
+    'brightonfestival.org': 'Brighton Festival',
+    'wtm.uk': 'WTM'
+  }
+  return domainMap[domain] || domain || 'Unknown'
+}
+
+function inferPlaylist(domain) {
+  const domainMap = {
+    'brightondome.org': '@BrightonDome',
+    'brightonfestival.org': '@BrightonFestival',
+    'wtm.uk': '@WTM'
+  }
+  return domainMap[domain] || (domain ? `@${domain.split('.')[0]}` : '@Unknown')
+}
+
+// Date parsing functions
+const MONTHS = {
+  january:1, february:2, march:3, april:4,
+  may:5, june:6, july:7, august:8,
+  september:9, october:10, november:11, december:12,
+  jan:1, feb:2, mar:3, apr:4,
+  jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12
+}
+
+const CURRENT_YEAR = new Date().getFullYear()
+
+function clean(str) {
+  return str
+    .replace(/\(.*?\)/g, '')
+    .replace(/,?\s*\d+(\.\d+)?\s*(am|pm)/gi, '')
+    .trim()
+}
+
+function stripDayName(str) {
+  return str.replace(/^(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)\s+/i, '').trim()
+}
+
+function parseSingleDate(str, fallbackYear) {
+  str = stripDayName(clean(str)).toLowerCase()
+  const parts = str.split(/[\s,]+/).filter(Boolean)
+  let day, month, year
+
+  for (const p of parts) {
+    if (/^\d{4}$/.test(p)) year = parseInt(p)
+    else if (/^\d{1,2}$/.test(p) && !day) day = parseInt(p)
+    else if (MONTHS[p]) month = MONTHS[p]
+    else if (MONTHS[p.substring(0,3)]) month = MONTHS[p.substring(0,3)]
+  }
+
+  if (!year) year = fallbackYear || CURRENT_YEAR
+  if (!day || !month) return null
+
+  return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+}
+
+function expandRange(startISO, endISO) {
+  const dates = []
+  const current = new Date(startISO + 'T12:00:00Z')
+  const end = new Date(endISO + 'T12:00:00Z')
+
+  while (current <= end) {
+    dates.push(current.toISOString().substring(0, 10))
+    current.setUTCDate(current.getUTCDate() + 1)
+  }
+  return dates
+}
+
+function parseDates(raw) {
+  if (!raw) return []
+  raw = clean(raw)
+
+  if (!raw.includes(' - ')) {
+    const d = parseSingleDate(raw)
+    return d ? [d] : []
+  }
+
+  const dashIndex = raw.indexOf(' - ')
+  const startRaw = raw.substring(0, dashIndex).trim()
+  const endRaw = raw.substring(dashIndex + 3).trim()
+
+  const endDate = parseSingleDate(endRaw)
+  if (!endDate) return []
+
+  const endYear = parseInt(endDate.substring(0, 4))
+  const endMonth = parseInt(endDate.substring(5, 7))
+
+  const startLower = startRaw.toLowerCase()
+  const startHasMonth = Object.keys(MONTHS).some(m => startLower.includes(m))
+
+  let startDate
+  if (startHasMonth) {
+    startDate = parseSingleDate(startRaw, endYear)
+  } else {
+    const dayMatch = startRaw.match(/\d+/)
+    if (!dayMatch) return []
+    const startDay = parseInt(dayMatch[0])
+    startDate = `${endYear}-${String(endMonth).padStart(2,'0')}-${String(startDay).padStart(2,'0')}`
+  }
+
+  if (!startDate) return []
+  return expandRange(startDate, endDate)
 }
