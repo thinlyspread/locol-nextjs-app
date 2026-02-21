@@ -10,58 +10,67 @@ export default async function handler(req, res) {
     // Extract captured list data (Browse AI structure)
     const capturedLists = task?.capturedLists || {}
     const listName = Object.keys(capturedLists)[0] // Get first list
-    const data = capturedLists[listName]?.[0] || req.body.data || {} // Fallback to old format
+    const listData = capturedLists[listName] || [] // Get array of items
 
-    console.log('Extracted data:', JSON.stringify(data, null, 2))
+    console.log(`Processing ${listData.length} events from list: ${listName}`)
 
-    const standardized = transformScrapedData(data)
-
-    console.log('Transformed to:', JSON.stringify(standardized, null, 2))
-
-    // Check duplicates in Staging
-    const filter = `Source='${standardized.Source}'`
+    // Get existing events from Staging for duplicate detection
     const stagingRes = await fetch(
-      `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Staging?filterByFormula=${encodeURIComponent(filter)}`,
+      `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Staging`,
       { headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` } }
     )
     const stagingData = await stagingRes.json()
     const existingEvents = new Set(stagingData.records.map(r => `${r.fields.Event}|${r.fields.When}`))
 
-    const key = `${standardized.Event}|${standardized.When}`
+    let inserted = 0
+    let skipped = 0
 
-    if (existingEvents.has(key)) {
-      console.log('Duplicate found, skipping:', key)
-      return res.json({ success: true, skipped: true, reason: 'duplicate' })
+    // Process each item in the list
+    for (const rawItem of listData) {
+      const standardized = transformScrapedData(rawItem)
+      const key = `${standardized.Event}|${standardized.When}`
+
+      // Skip duplicates
+      if (existingEvents.has(key)) {
+        console.log('Duplicate found, skipping:', key)
+        skipped++
+        continue
+      }
+
+      // Insert to Staging
+      const insertRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Staging`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          records: [{
+            fields: {
+              Event: standardized.Event,
+              When: standardized.When,
+              Link: standardized.Link,
+              Links: JSON.stringify(standardized.Links),
+              Playlist: standardized.Playlist,
+              Source: standardized.Source,
+              Status: 'Approved'
+            }
+          }]
+        })
+      })
+
+      const insertData = await insertRes.json()
+
+      if (insertData.records?.[0]?.id) {
+        console.log('Inserted:', standardized.Event, '→', insertData.records[0].id)
+        inserted++
+        existingEvents.add(key) // Add to set to prevent duplicates within same batch
+      } else {
+        console.log('Failed to insert:', standardized.Event, insertData.error)
+      }
     }
 
-    // Insert to Staging
-    const insertRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Staging`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        records: [{
-          fields: {
-            Event: standardized.Event,
-            When: standardized.When,
-            Link: standardized.Link,
-            Links: JSON.stringify(standardized.Links),
-            Playlist: standardized.Playlist,
-            Source: standardized.Source,
-            Status: 'Approved'
-          }
-        }]
-      })
-    })
-
-    const insertData = await insertRes.json()
-    console.log('Insert status:', insertRes.status)
-    console.log('Insert response:', JSON.stringify(insertData, null, 2))
-    console.log('Inserted ID:', insertData.records?.[0]?.id || 'FAILED')
-
-    res.json({ success: true, inserted: true, recordId: insertData.records?.[0]?.id })
+    res.json({ success: true, inserted, skipped, total: listData.length })
 
   } catch (error) {
     console.error('Webhook error:', error)
