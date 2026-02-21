@@ -354,7 +354,7 @@ export default function Home() {
                           }
                         }
 
-                        return uniqueDomains.slice(0, 3).map((item, idx) => {
+                        return uniqueDomains.map((item, idx) => {
                           // Check if playlist exists for this domain
                           const playlistExists = playlists.find(p => p.handle === item.playlist)
 
@@ -393,11 +393,6 @@ export default function Home() {
                           )
                         })
                       })()}
-                      {event.links.length > 3 && (
-                        <span className="text-gray-500 text-xs ml-1">
-                          +{event.links.length - 3} more
-                        </span>
-                      )}
                     </div>
                   </div>
                 ))}
