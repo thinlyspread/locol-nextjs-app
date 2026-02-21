@@ -381,18 +381,52 @@ JSON array of objects with playlist attribution:
 - **Enables domain deduplication** (multiple playlists can share same domain)
 - **Supports cross-verification** (Ticketmaster returning Universe link)
 
-### **Deduplication by Domain**
-When displaying, domains are deduplicated to prevent showing universe.com twice:
+### **Link Display Strategy**
 
+Event cards show **actual event link domains** (where tickets are sold), deduplicated by domain.
+
+**Key Principle:** Link text always matches link destination (basic UX).
+
+**Example:**
+```
+Event has 4 sources:
+- @Ticketmaster → ticketmaster.co.uk/event
+- @Skiddle → universe.com/event (Skiddle redirects to Universe)
+- @BrightonDome → brightondome.org/event
+- @Universe → universe.com/event
+
+Display shows 3 unique domains:
+✓ ticketmaster.co.uk ↗
+✓ universe.com ↗
+✓ brightondome.org ↗
+
+Note: @Skiddle is NOT shown because it redirects to universe.com (already displayed)
+```
+
+**Why this approach:**
+- **Simple UX** - Users see where they can actually buy tickets
+- **No confusion** - Link text matches destination
+- **Automatic deduplication** - No duplicate domains
+- **Clean display** - Only actual ticket sources
+
+**Tradeoff:**
+- **Attribution loss** - Users won't see all sources that listed the event (e.g., @Skiddle hidden if redirecting)
+- **Benefit** - Cleaner, more actionable links for users
+
+**Code:** `pages/index.js` (lines ~357)
 ```javascript
-// Before dedup: 
-[
-  {playlist: "@Ticketmaster", url: "https://universe.com/a"},
-  {playlist: "@Universe", url: "https://universe.com/b"}
-]
+// Extract unique domains from actual event links
+const uniqueDomains = Array.from(
+  new Set(event.links.map(link => getDomainFromUrl(link.url)))
+).filter(Boolean).map(domain => {
+  const linkEntry = event.links.find(l => getDomainFromUrl(l.url) === domain)
+  return { domain, url: linkEntry.url, playlist: linkEntry.playlist }
+})
 
-// After dedup (display):
-universe.com (shows first URL found)
+// Display each unique domain
+uniqueDomains.map(item => (
+  <a href={item.url}>{item.domain}</a>
+))
 ```
 
 ---
@@ -481,11 +515,6 @@ Scraper: "Event - (Music) - @ Venue"  ❌
 ```javascript
 'Playlist': playlistMap[handle] ? [playlistMap[handle]] : []
 ```
-
-### **5. Missing universe.com Link**
-**Problem:** Duplicate detection blocked Universe scraper because Brighton Dome scraper already inserted same event
-
-**Fix:** Source-aware duplicate key allows both
 
 ---
 
@@ -626,4 +655,4 @@ NEXT_PUBLIC_SKIDDLE_KEY=your_skiddle_key
 
 ---
 
-Last updated: 2026-02-21
+Last updated: 2026-02-21 (v0.1.0)
