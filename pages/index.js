@@ -111,7 +111,13 @@ export default function Home() {
     yesterday.setHours(0, 0, 0, 0)
     const eventDate = new Date(event.date + 'T00:00:00')
     const isNotTooOld = eventDate >= yesterday
-    
+
+    // Hide events more than 2 weeks away
+    const twoWeeksFromNow = new Date()
+    twoWeeksFromNow.setDate(twoWeeksFromNow.getDate() + 14)
+    twoWeeksFromNow.setHours(23, 59, 59, 999)
+    const isNotTooFar = eventDate <= twoWeeksFromNow
+
     let matchesDate = true
     const hasDateFilter = activeFilters.has('#today') || activeFilters.has('#tomorrow')
     
@@ -147,7 +153,7 @@ export default function Home() {
       }
     }
     
-    return matchesPlaylist && matchesSearch && matchesDate && isNotTooOld
+    return matchesPlaylist && matchesSearch && matchesDate && isNotTooOld && isNotTooFar
   })
     .sort((a, b) => new Date(a.date) - new Date(b.date))
 
