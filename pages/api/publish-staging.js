@@ -45,7 +45,7 @@ export default async function handler(req, res) {
         'When': r.fields.When,
         'Link': r.fields.Link,
         'Links': r.fields.Links,
-        'Playlist': [playlistMap[r.fields.Playlist]]  // Convert handle to ID array
+        'Playlist': playlistMap[r.fields.Playlist] ? [playlistMap[r.fields.Playlist]] : []
       }
     }))
 

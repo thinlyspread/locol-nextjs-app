@@ -121,7 +121,8 @@ function inferSource(domain) {
   const domainMap = {
     'brightondome.org': 'Brighton Dome',
     'brightonfestival.org': 'Brighton Festival',
-    'wtm.uk': 'WTM'
+    'wtm.uk': 'WTM',
+    'universe.com': 'Universe'
   }
   return domainMap[domain] || domain || 'Unknown'
 }
@@ -130,7 +131,8 @@ function inferPlaylist(domain) {
   const domainMap = {
     'brightondome.org': '@BrightonDome',
     'brightonfestival.org': '@BrightonFestival',
-    'wtm.uk': '@WTM'
+    'wtm.uk': '@WTM',
+    'universe.com': '@Universe'
   }
   return domainMap[domain] || (domain ? `@${domain.split('.')[0]}` : '@Unknown')
 }
