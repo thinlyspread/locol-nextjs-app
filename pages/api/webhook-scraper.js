@@ -9,10 +9,31 @@ export default async function handler(req, res) {
 
     // Extract captured list data (Browse AI structure)
     const capturedLists = task?.capturedLists || {}
-    const listName = Object.keys(capturedLists)[0] // Get first list
-    const listData = capturedLists[listName] || [] // Get array of items
+    const listName = Object.keys(capturedLists)[0]
+    const listData = capturedLists[listName] || []
 
     console.log(`Processing ${listData.length} events from list: ${listName}`)
+
+    // Fetch Playlists from Airtable to map domains to handles
+    const playlistsRes = await fetch(
+      `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Playlists`,
+      { headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` } }
+    )
+    const playlistsData = await playlistsRes.json()
+
+    // Build domain → handle map from Website field
+    const domainToPlaylist = new Map()
+    playlistsData.records.forEach(p => {
+      const website = p.fields.Website
+      if (website) {
+        const domain = normalizeDomain(website)
+        if (domain) {
+          domainToPlaylist.set(domain, p.fields.Handle)
+        }
+      }
+    })
+
+    console.log('Domain mappings:', Array.from(domainToPlaylist.entries()))
 
     // Get existing events from Staging for duplicate detection
     const stagingRes = await fetch(
@@ -20,14 +41,16 @@ export default async function handler(req, res) {
       { headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` } }
     )
     const stagingData = await stagingRes.json()
-    const existingEvents = new Set(stagingData.records.map(r => `${r.fields.Event}|${r.fields.When}|${r.fields.Source}`))
+    const existingEvents = new Set(stagingData.records.map(r =>
+      `${r.fields.Event}|${r.fields.When}|${r.fields.Source}`
+    ))
 
     let inserted = 0
     let skipped = 0
 
     // Process each item in the list
     for (const rawItem of listData) {
-      const standardized = transformScrapedData(rawItem)
+      const standardized = transformScrapedData(rawItem, domainToPlaylist)
       const key = `${standardized.Event}|${standardized.When}|${standardized.Source}`
 
       // Skip duplicates
@@ -64,7 +87,7 @@ export default async function handler(req, res) {
       if (insertData.records?.[0]?.id) {
         console.log('Inserted:', standardized.Event, '→', insertData.records[0].id)
         inserted++
-        existingEvents.add(key) // Add to set to prevent duplicates within same batch
+        existingEvents.add(key)
       } else {
         console.log('Failed to insert:', standardized.Event, insertData.error)
       }
@@ -78,8 +101,21 @@ export default async function handler(req, res) {
   }
 }
 
+// Normalize domain from URL
+function normalizeDomain(url) {
+  if (!url) return null
+  try {
+    // Handle URLs with or without protocol
+    const urlObj = url.startsWith('http') ? new URL(url) : new URL(`https://${url}`)
+    return urlObj.hostname.replace('www.', '').toLowerCase()
+  } catch {
+    // If URL parsing fails, try basic string manipulation
+    return url.replace(/^(https?:\/\/)?(www\.)?/i, '').split('/')[0].toLowerCase()
+  }
+}
+
 // Universal transform function
-function transformScrapedData(raw) {
+function transformScrapedData(raw, domainToPlaylist) {
   // Build event name from available fields
   let eventParts = []
   if (raw.Title) eventParts.push(raw.Title)
@@ -89,14 +125,16 @@ function transformScrapedData(raw) {
 
   const eventName = eventParts.filter(Boolean).join(' ') || 'Untitled Event'
 
-  // Parse date (returns first date if range)
+  // Parse date
   const dates = parseDates(raw.Date || '')
   const parsedDate = dates[0] || new Date().toISOString().substring(0, 10)
 
-  // Determine source and playlist from link domain
-  const domain = getDomainFromUrl(raw.Link)
-  const source = inferSource(domain)
-  const playlist = inferPlaylist(domain)
+  // Determine playlist from link using Airtable mapping
+  const linkDomain = normalizeDomain(raw.Link)
+  const playlist = domainToPlaylist.get(linkDomain) || `@${linkDomain?.split('.')[0] || 'Unknown'}`
+
+  // Use playlist handle as source
+  const source = playlist
 
   return {
     Event: eventName,
@@ -108,36 +146,7 @@ function transformScrapedData(raw) {
   }
 }
 
-function getDomainFromUrl(url) {
-  if (!url) return null
-  try {
-    return new URL(url).hostname.replace('www.', '')
-  } catch {
-    return null
-  }
-}
-
-function inferSource(domain) {
-  const domainMap = {
-    'brightondome.org': 'Brighton Dome',
-    'brightonfestival.org': 'Brighton Festival',
-    'wtm.uk': 'WTM',
-    'universe.com': 'Universe'
-  }
-  return domainMap[domain] || domain || 'Unknown'
-}
-
-function inferPlaylist(domain) {
-  const domainMap = {
-    'brightondome.org': '@BrightonDome',
-    'brightonfestival.org': '@BrightonFestival',
-    'wtm.uk': '@WTM',
-    'universe.com': '@Universe'
-  }
-  return domainMap[domain] || (domain ? `@${domain.split('.')[0]}` : '@Unknown')
-}
-
-// Date parsing functions
+// Date parsing functions (unchanged)
 const MONTHS = {
   january:1, february:2, march:3, april:4,
   may:5, june:6, july:7, august:8,
