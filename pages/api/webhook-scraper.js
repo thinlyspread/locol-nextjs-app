@@ -3,12 +3,18 @@ export default async function handler(req, res) {
   const AIRTABLE_BASE_ID = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID
 
   try {
-    const { data } = req.body
+    const { event, task } = req.body
 
-    console.log('Webhook received:', JSON.stringify(data, null, 2))
+    console.log('RAW webhook:', JSON.stringify(req.body, null, 2))
 
-    // Universal transform
-    const standardized = transformScrapedData(data)
+    // Extract captured list data
+    const capturedLists = task?.capturedLists || {}
+    const listName = Object.keys(capturedLists)[0] // Get first list
+    const listData = capturedLists[listName]?.[0] || {} // Get first item
+
+    console.log('Extracted data:', JSON.stringify(listData, null, 2))
+
+    const standardized = transformScrapedData(listData)
 
     console.log('Transformed to:', JSON.stringify(standardized, null, 2))
 
@@ -51,7 +57,8 @@ export default async function handler(req, res) {
     })
 
     const insertData = await insertRes.json()
-    console.log('Insert response:', insertRes.status, insertData.error || 'success')
+    console.log('Insert status:', insertRes.status)
+    console.log('Insert response:', JSON.stringify(insertData, null, 2))
     console.log('Inserted ID:', insertData.records?.[0]?.id || 'FAILED')
 
     res.json({ success: true, inserted: true, recordId: insertData.records?.[0]?.id })
