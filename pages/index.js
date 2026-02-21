@@ -322,6 +322,38 @@ export default function Home() {
                           new Map(linkDomains.map(item => [item.domain, item])).values()
                         )
 
+                        // Fallback: if no Links array, use primary Link field
+                        if (uniqueDomains.length === 0 && event.link) {
+                          const domain = getDomainFromUrl(event.link)
+                          if (domain) {
+                            return (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-orange-500 text-xs" title="Unverified source">!</span>
+                                <a
+                                  href={event.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-blue-600 hover:text-blue-800 font-medium"
+                                >
+                                  {domain}
+                                </a>
+                                <a
+                                  href={event.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-gray-400 hover:text-blue-600"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                </a>
+                              </div>
+                            )
+                          }
+                        }
+
                         return uniqueDomains.slice(0, 3).map((item, idx) => {
                           // Check if playlist exists for this domain
                           const playlistExists = playlists.find(p => p.handle === item.playlist)
