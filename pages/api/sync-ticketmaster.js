@@ -59,18 +59,27 @@ export default async function handler(req, res) {
       return !existingEvents.has(key)
     })
 
-    // Create records for Staging - all link to single @Ticketmaster playlist
-    const records = newEvents.map(event => ({
-      fields: {
-        'Event': event.name,
-        'When': event.dates.start.localDate,
-        'Link': event.url,
-        'Links': JSON.stringify([{ playlist: '@Ticketmaster', url: event.url }]),
-        'Playlist': '@Ticketmaster',
-        'Source': 'Ticketmaster',
-        'Status': 'Approved'
+    // Create records for Staging with enhanced titles
+    const records = newEvents.map(event => {
+      const name = event.name
+      const genre = event.classifications?.[0]?.genre?.name
+      const venue = event._embedded?.venues?.[0]?.name || 'Unknown Venue'
+
+      // Build title: Name (Genre) @ Venue
+      const eventTitle = `${name}${genre ? ` (${genre})` : ''} @ ${venue}`
+
+      return {
+        fields: {
+          'Event': eventTitle,
+          'When': event.dates.start.localDate,
+          'Link': event.url,
+          'Links': JSON.stringify([{ playlist: '@Ticketmaster', url: event.url }]),
+          'Playlist': '@Ticketmaster',
+          'Source': 'Ticketmaster',
+          'Status': 'Approved'
+        }
       }
-    }))
+    })
 
     // Batch upload to STAGING
     let synced = 0

@@ -58,18 +58,27 @@ export default async function handler(req, res) {
       return !existingEvents.has(key)
     })
 
-    // Create records for Staging - all link to single @Skiddle playlist
-    const records = newEvents.map(event => ({
-      fields: {
-        'Event': event.eventname,
-        'When': event.date,
-        'Link': event.link,
-        'Links': JSON.stringify([{ playlist: '@Skiddle', url: event.link }]),
-        'Playlist': '@Skiddle',
-        'Source': 'Skiddle',
-        'Status': 'Approved'
+    // Create records for Staging with enhanced titles
+    const records = newEvents.map(event => {
+      const name = event.eventname
+      const code = event.EventCode
+      const venue = event.venue?.name || 'Unknown Venue'
+
+      // Build title: Name (EventCode) @ Venue
+      const eventTitle = `${name}${code ? ` (${code})` : ''} @ ${venue}`
+
+      return {
+        fields: {
+          'Event': eventTitle,
+          'When': event.date,
+          'Link': event.link,
+          'Links': JSON.stringify([{ playlist: '@Skiddle', url: event.link }]),
+          'Playlist': '@Skiddle',
+          'Source': 'Skiddle',
+          'Status': 'Approved'
+        }
       }
-    }))
+    })
 
     // Batch upload to STAGING
     let synced = 0
