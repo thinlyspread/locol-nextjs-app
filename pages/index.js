@@ -303,22 +303,34 @@ export default function Home() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                      {event.playlist.slice(0, 3).map((handle, idx) => (
-                        <>
-                          {idx > 0 && <span className="text-gray-400 mx-1">•</span>}
-                          <div key={idx} className="flex items-center gap-1.5">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                toggleFilter(handle)
-                              }}
-                              className="text-blue-600 hover:text-blue-800 font-medium"
-                            >
-                              {handle}
-                            </button>
-                            {event.link && (
+                      {(() => {
+                        const domainPlaylist = getDomainPlaylist(event.link, playlists)
+                        const otherPlaylists = domainPlaylist
+                          ? event.playlist.filter(p => p !== domainPlaylist)
+                          : event.playlist
+                        const displayPlaylists = domainPlaylist
+                          ? [domainPlaylist, ...otherPlaylists]
+                          : event.playlist
+                        const getPlaylistUrl = (playlistHandle) => {
+                          const linkEntry = event.links.find(l => l.playlist === playlistHandle)
+                          return linkEntry?.url || event.link
+                        }
+                        return displayPlaylists.slice(0, 3).map((handle, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            {idx > 0 && <span className="text-gray-400">•</span>}
+                            {idx > 0 && domainPlaylist && <span className="text-gray-500 text-sm">via</span>}
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  toggleFilter(handle)
+                                }}
+                                className="text-blue-600 hover:text-blue-800 font-medium"
+                              >
+                                {handle}
+                              </button>
                               <a
-                                href={event.link}
+                                href={getPlaylistUrl(handle)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}
@@ -328,10 +340,10 @@ export default function Home() {
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                                 </svg>
                               </a>
-                            )}
+                            </div>
                           </div>
-                        </>
-                      ))}
+                        ))
+                      })()}
                       {event.playlist.length > 3 && (
                         <span className="text-gray-500 text-sm ml-1">
                           +{event.playlist.length - 3} more
