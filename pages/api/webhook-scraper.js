@@ -20,7 +20,7 @@ export default async function handler(req, res) {
       { headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` } }
     )
     const stagingData = await stagingRes.json()
-    const existingEvents = new Set(stagingData.records.map(r => `${r.fields.Event}|${r.fields.When}`))
+    const existingEvents = new Set(stagingData.records.map(r => `${r.fields.Event}|${r.fields.When}|${r.fields.Source}`))
 
     let inserted = 0
     let skipped = 0
@@ -28,7 +28,7 @@ export default async function handler(req, res) {
     // Process each item in the list
     for (const rawItem of listData) {
       const standardized = transformScrapedData(rawItem)
-      const key = `${standardized.Event}|${standardized.When}`
+      const key = `${standardized.Event}|${standardized.When}|${standardized.Source}`
 
       // Skip duplicates
       if (existingEvents.has(key)) {
@@ -87,7 +87,7 @@ function transformScrapedData(raw) {
   if (raw.Category) eventParts.push(`(${raw.Category})`)
   if (raw.Venue) eventParts.push(`@ ${raw.Venue}`)
 
-  const eventName = eventParts.join(' - ') || 'Untitled Event'
+  const eventName = eventParts.filter(Boolean).join(' ') || 'Untitled Event'
 
   // Parse date (returns first date if range)
   const dates = parseDates(raw.Date || '')
